@@ -2422,7 +2422,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         rank = np.lexsort(((ys - cy) ** 2 + (xs - cx) ** 2, -dv))[:80]
         fs = cs * min(0.9 + 0.09 * math.sqrt(T[i]), 6.5)
         placed = False
-        while fs >= max(cs * 0.75, 7):
+        while fs >= (max(cs * 0.55, 8) if geo else max(cs * 0.75, 7)):
             lines = [(name, fs, False), (value, fs * 0.8, False)]
             if not thematic and pops[i] / world >= 0.02 and fs >= cs * 2.2:
                 lines.append((tx["share"].format(p=fmt_num(100 * pops[i] / world, 1, tx)), fs * 0.36, False))
@@ -2434,11 +2434,12 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                     continue
                 r0, r1, c0, c1 = canvas.cells(*box)
                 part = mine[r0:r1, c0:c1]
-                if part.mean() < 0.9 or canvas.occ[r0:r1, c0:c1].any():
+                if part.mean() < (0.6 if geo else 0.9) or canvas.occ[r0:r1, c0:c1].any():
                     continue
                 y = box[1]
-                for s, size, bold in lines:
-                    dr.text((px, y), s, size, bold, tcol, anchor="ma")
+                for s, size, bold in lines:     # on a map the text may cross a border: a halo of its own colour
+                    dr.text((px, y), s, size, bold, tcol, anchor="ma",
+                            **({"halo": colour_of[i], "halo_w": max(1, cs // 8)} if geo else {}))
                     y += text_size(font(size, bold), s)[1] * 1.08
                 canvas.occ[r0:r1, c0:c1] = True
                 placed = True
@@ -2446,25 +2447,41 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             if placed:
                 break
             fs *= 0.88
-        if not placed and not geo:          # a geographic map labels only what fits
+        if not placed:
             external.append(i)
 
     # --- labels outside, with a leader line. They may sit over other countries
     # (with a halo) when that keeps them much closer than the nearest open sea.
-    efs = max(cs * 0.95, 8)
+    # A geographic map has no room to spare: the biggest countries first, and a
+    # label that would cover another is left out rather than overlap.
+    efs = max(cs * 0.7, 8) if geo else max(cs * 0.95, 8)
     f = font(efs)
     land = G > 0
     halo = th["ocean"] or th["bg"]
-    dirs = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 24, endpoint=False)]
+    dirs = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36 if geo else 24, endpoint=False)]
     leaders, ext_texts = [], []
+    wired = np.zeros_like(canvas.occ)
+    unlabelled = []
     for i in external:
         s = f"{units[i - 1]['name']} {value_text(i)}"
         bw, bh = text_size(f, s)
         bw, bh = bw + 4, bh + 2
         ys, xs = np.nonzero(main_part(G == i))
         ay, ax = (ys.mean() + 0.5) * cs, (xs.mean() + 0.5) * cs
+
+        def leader_cells(box):
+            """The cells under the leader from the nearest part of the country to the label."""
+            bx, by = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+            k = np.argmin(((ys + 0.5) * cs - by) ** 2 + ((xs + 0.5) * cs - bx) ** 2)
+            tyc, txc = (ys[k] + 0.5) * cs, (xs[k] + 0.5) * cs
+            ex, ey = min(max(txc, box[0]), box[2]), min(max(tyc, box[1]), box[3])
+            t = np.linspace(0, 1, 2 * int(math.hypot(ex - txc, ey - tyc) / cs) + 3)[1:-1]
+            cells = (np.clip((tyc + (ey - tyc) * t) // cs, 0, G.shape[0] - 1).astype(int),
+                     np.clip((txc + (ex - txc) * t) // cs, 0, G.shape[1] - 1).astype(int))
+            return cells, (ex, ey, txc, tyc)
+
         best = None
-        for r in range(1, 50):
+        for r in range(1, 20 if geo else 50):
             if best is not None and best[0] < r:
                 break
             for dx, dy in dirs:
@@ -2476,21 +2493,25 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                     continue
                 r0, r1, c0, c1 = canvas.cells(*box)
                 score = 1000 * canvas.occ[r0:r1, c0:c1].sum() + 0.6 * land[r0:r1, c0:c1].sum() + r
+                if geo:                    # nor cross other labels and leader lines
+                    (ly, lx), _ = leader_cells(box)
+                    score += (1000 * (canvas.occ[ly, lx].sum() + wired[r0:r1, c0:c1].sum())
+                              + 60 * wired[ly, lx].sum())
                 if best is None or score < best[0]:
                     best = (score, box)
-        if best is None:
+        if best is None or (geo and best[0] >= 1000):
+            unlabelled.append(units[i - 1]["name"])
             continue
         box = best[1]
         r0, r1, c0, c1 = canvas.cells(*box)
         canvas.occ[r0:r1, c0:c1] = True
-        bx, by = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-        k = np.argmin(((ys + 0.5) * cs - by) ** 2 + ((xs + 0.5) * cs - bx) ** 2)
-        tyc, txc = (ys[k] + 0.5) * cs, (xs[k] + 0.5) * cs
-        ex = min(max(txc, box[0]), box[2])
-        ey = min(max(tyc, box[1]), box[3])
+        cells, (ex, ey, txc, tyc) = leader_cells(box)
         if math.hypot(ex - txc, ey - tyc) > cs * 0.9:
             leaders.append((ex, ey, txc, tyc))
+            wired[cells] = True
         ext_texts.append(((box[0] + 2, box[1] + 1), s))
+    if unlabelled:
+        log(f"  no room for {len(unlabelled)} label(s): {', '.join(unlabelled)}")
     dr.lines(leaders, th["lead"], max(1, cs // 10))
     for xy, s in ext_texts:
         dr.text(xy, s, efs, False, th["label"], anchor="la", halo=halo, halo_w=max(1, cs // 7))

@@ -249,8 +249,11 @@ difference) from its neighbours' colours, so neighbours never share a colour or 
 ## Limitations
 
 - Shapes and positions are approximate: this is a cartogram, not a map (except `--style map`).
-- On `--style map` very small countries (Singapore, Malta, Pacific islands) are barely visible
-  and only countries with room for their label are labelled; Antarctica is left out.
+- On `--style map` very small countries (Singapore, Malta, Pacific islands) are barely visible.
+  Names that do not fit inside a country go beside it with a leader line; on the world map about
+  35 small countries in the most crowded places (Balkans, Caribbean, African Great Lakes) stay
+  unnamed so that labels never overlap (the log lists them) — `--region` shows them all.
+  Antarctica is left out.
 - In the 2018 layout, the areas that grew most (West Africa, southern India) visibly bulge, and
   the further a year is from 2018 the more the shapes drift: by 2050 Africa is much rounder,
   and going back to 2000 leaves some countries ragged.

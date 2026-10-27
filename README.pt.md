@@ -249,8 +249,11 @@ cores dos vizinhos, para que vizinhos nunca tenham a mesma cor nem tons quase ig
 ## Limitações
 
 - Formas e posições são aproximadas: é um cartograma, não um mapa (exceto com `--style map`).
-- Em `--style map` os países muito pequenos (Singapura, Malta, ilhas do Pacífico) mal se veem e só
-  têm legenda os países onde ela cabe; a Antártida fica de fora.
+- Em `--style map` os países muito pequenos (Singapura, Malta, ilhas do Pacífico) mal se veem. Os
+  nomes que não cabem dentro do país ficam ao lado, com uma linha de chamada; no mapa-mundo, uns 35
+  países pequenos dos sítios mais apertados (Balcãs, Caraíbas, Grandes Lagos africanos) ficam sem
+  nome para as etiquetas não se sobreporem (o registo diz quais) — `--region` mostra-os todos. A
+  Antártida fica de fora.
 - Na disposição de 2018, as zonas que mais cresceram (África Ocidental, sul da Índia) ficam
   visivelmente mais salientes, e quanto mais longe de 2018 mais as formas se afastam do original:
   em 2050 a África fica muito mais redonda, e recuar até 2000 deixa alguns países recortados.
