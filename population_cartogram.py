@@ -35,6 +35,10 @@ cartogram, but the Natural Earth borders themselves are moved with it, then
 corrected with the Dougenik-Chrisman-Niemeyer algorithm so that every
 country's area is proportional to its population.
 
+Map style (--style map): no cartogram at all, the ordinary geographic map in one
+of several projections (Equal Earth, Mercator, Web Mercator, Winkel Tripel,
+Robinson, Mollweide), countries coloured by population or by --color-by.
+
 Data (downloaded on the first run and cached in ~/.cache/population_cartogram):
   - World Bank API (api.worldbank.org), refreshed after 30 days
   - Our World in Data, population (UN WPP), refreshed after 30 days
@@ -71,6 +75,7 @@ import urllib.request
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy.fft import dctn, idctn
+from scipy.interpolate import CubicSpline
 from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates
 from scipy.ndimage import label as cc_label
 from scipy.spatial import cKDTree
@@ -151,6 +156,17 @@ TEXTS = {
         "small_outline": "Smallest countries (fewer than {n} people)",
         "outline_map": "Map: Natural Earth, resized with the Gastner–Newman diffusion method, in the style of "
                        "Worldmapper. Shapes and positions are approximate.",
+        "title_map": "World population {year}",
+        "title_map_proj": "World population {year} (UN projection)",
+        "title_region_map": "{region}: population {year}",
+        "title_region_map_proj": "{region}: population {year} (UN projection)",
+        "title_map_by": "{region}: {what}",
+        "world": "World",
+        "map_scale": "{n} colour classes from the lowest to the highest value ({breaks} scale).",
+        "breaks": {"log": "logarithmic", "linear": "linear", "quantile": "quantile"},
+        "map_world": "World population: {total}.",
+        "map_geo": "Map: Natural Earth, {proj} projection.",
+        "population": "population",
         "colour_by": "Colour: {what}",
         "no_data": "no data",
         "growth": "population change {a}–{b}",
@@ -188,6 +204,17 @@ TEXTS = {
         "small_outline": "Países mais pequenos (menos de {n} pessoas)",
         "outline_map": "Mapa: Natural Earth, redimensionado pelo método de difusão de Gastner–Newman, ao estilo "
                        "do Worldmapper. Formas e posições aproximadas.",
+        "title_map": "População mundial {year}",
+        "title_map_proj": "População mundial {year} (projeção da ONU)",
+        "title_region_map": "{region}: população {year}",
+        "title_region_map_proj": "{region}: população {year} (projeção da ONU)",
+        "title_map_by": "{region}: {what}",
+        "world": "Mundo",
+        "map_scale": "{n} classes de cor, do menor ao maior valor (escala {breaks}).",
+        "breaks": {"log": "logarítmica", "linear": "linear", "quantile": "por quantis"},
+        "map_world": "População mundial: {total}.",
+        "map_geo": "Mapa: Natural Earth, projeção {proj}.",
+        "population": "população",
         "colour_by": "Cor: {what}",
         "no_data": "sem dados",
         "growth": "variação da população {a}–{b}",
@@ -225,6 +252,17 @@ TEXTS = {
         "small_outline": "Países más pequeños (menos de {n} personas)",
         "outline_map": "Mapa: Natural Earth, redimensionado con el método de difusión de Gastner–Newman, al estilo "
                        "de Worldmapper. Formas y posiciones aproximadas.",
+        "title_map": "Población mundial {year}",
+        "title_map_proj": "Población mundial {year} (proyección de la ONU)",
+        "title_region_map": "{region}: población {year}",
+        "title_region_map_proj": "{region}: población {year} (proyección de la ONU)",
+        "title_map_by": "{region}: {what}",
+        "world": "Mundo",
+        "map_scale": "{n} clases de color, del menor al mayor valor (escala {breaks}).",
+        "breaks": {"log": "logarítmica", "linear": "lineal", "quantile": "por cuantiles"},
+        "map_world": "Población mundial: {total}.",
+        "map_geo": "Mapa: Natural Earth, proyección {proj}.",
+        "population": "población",
         "colour_by": "Color: {what}",
         "no_data": "sin datos",
         "growth": "variación de la población {a}–{b}",
@@ -262,6 +300,24 @@ DEFAULT_RAMPS = {
               "diverging": ["#2166ac", "#92c5de", "#f7f7f7", "#fddbc7", "#f4a582", "#d6604d", "#b2182b"]},
     "dark": {"sequential": ["#3b2a6b", "#3e4f94", "#2f7d8f", "#21a07f", "#5cc35a", "#b2d834", "#fde725"],
              "diverging": ["#4393c3", "#92c5de", "#e8e8e8", "#fddbc7", "#f4a582", "#e0614f", "#c21f2e"]},
+}
+# --ramp: colour scales for values, low to high ("palette" = the palette's sequential
+# ramp; a name ending in _r is reversed). Viridis, magma and cividis from matplotlib,
+# rainbow is Google's Turbo, the others are ColorBrewer (Cynthia Brewer).
+RAMPS = {
+    "viridis": ["#440154", "#482878", "#3e4a89", "#31688e", "#26828e", "#1f9e89", "#35b779", "#6ece58",
+                "#b5de2b", "#fde725"],
+    "magma": ["#000004", "#1c1044", "#4f127b", "#812581", "#b5367a", "#e55964", "#fb8761", "#fec287", "#fcfdbf"],
+    "cividis": ["#00204d", "#31446b", "#666970", "#958f78", "#cbba69", "#ffea46"],
+    "blues": ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"],
+    "greens": ["#f7fcf5", "#e5f5e0", "#c7e9c0", "#a1d99b", "#74c476", "#41ab5d", "#238b45", "#006d2c", "#00441b"],
+    "reds": ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"],
+    "ylorrd": ["#ffffcc", "#ffeda0", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026"],
+    "ylgnbu": ["#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58"],
+    "rainbow": ["#30123b", "#4145ab", "#4675ed", "#39a2fc", "#1bcfd4", "#24eca6", "#61fc6c", "#a4fc3b",
+                "#d1e835", "#f3c63a", "#fe9b2d", "#f36315", "#d93806", "#b11901", "#7a0403"],
+    "spectral": ["#5e4fa2", "#3288bd", "#66c2a5", "#abdda4", "#e6f598", "#ffffbf", "#fee08b", "#fdae61",
+                 "#f46d43", "#d53e4f", "#9e0142"],
 }
 
 # --region: continents (as in the title box) that make up each region
@@ -1329,7 +1385,100 @@ def layout_outlines(units, frame, lab, pix, y, x, pops, per_cell, rho_bar):
     T = np.rint(pops / per_cell).astype(int)
     T[0] = 0
 
-    # the outlines on the grid: cell (r, c) covers [c, c + 1) x [r, r + 1)
+    G = raster_shapes(shapes, gw, gh, T, centre)
+    log(f"  {gw}x{gh} cells of {fmt_num(per_cell, 0, TEXTS['en'])} people")
+    return G, T, centre, shapes
+
+
+# ---------------------------------------------------------------------------
+# Geographic map (--style map): undistorted countries coloured by a value
+# ---------------------------------------------------------------------------
+PROJECTIONS = {"equal-earth": "Equal Earth", "mercator": "Mercator", "web-mercator": "Web Mercator",
+               "winkel-tripel": "Winkel Tripel", "robinson": "Robinson", "mollweide": "Mollweide"}
+MERCATOR_LAT = 85.0511                 # Web Mercator's limit (the whole map is a square)
+WGS84_E = 0.0818191908426              # eccentricity of the WGS 84 ellipsoid
+# Robinson's table: length of the parallel and distance from the equator, every 5 degrees
+ROBINSON_PLEN = CubicSpline(np.arange(0, 91, 5), [
+    1.0000, 0.9986, 0.9954, 0.9900, 0.9822, 0.9730, 0.9600, 0.9427, 0.9216, 0.8962,
+    0.8679, 0.8350, 0.7986, 0.7597, 0.7186, 0.6732, 0.6213, 0.5722, 0.5322])
+ROBINSON_PDFE = CubicSpline(np.arange(0, 91, 5), [
+    0.0000, 0.0620, 0.1240, 0.1860, 0.2480, 0.3100, 0.3720, 0.4340, 0.4958, 0.5571,
+    0.6176, 0.6769, 0.7346, 0.7903, 0.8435, 0.8936, 0.9394, 0.9761, 1.0000])
+MAP_SOUTH = -58.0                      # like the cartograms, without Antarctica
+MAP_CELLS = 24000                      # grid cells of a map: ~3700 x 1600 px with 16 px cells
+MAP_CELL_PX = 16
+# --region on --style map: central meridian, then the west, east, south and north limits
+REGION_VIEW = {"africa": (17, -20, 55, -36, 38), "asia": (90, 25, 150, -12, 56),
+               "europe": (15, -25, 50, 34, 72), "north-america": (-100, -170, -50, 6, 84),
+               "south-america": (-60, -83, -33, -56, 13), "americas": (-85, -170, -30, -56, 84),
+               "oceania": (155, 110, 210, -48, 20)}
+
+
+def project(name, lon, lat):
+    """x, y (y up) on a sphere of radius 1 of lon/lat in degrees, central meridian 0."""
+    lon, lat = np.asarray(lon, float), np.asarray(lat, float)
+    lam, phi = np.radians(lon), np.radians(lat)
+    if name == "equal-earth":
+        return equal_earth(lon, lat)
+    if name in ("mercator", "web-mercator"):
+        phi = np.radians(np.clip(lat, -MERCATOR_LAT, MERCATOR_LAT))
+        y = np.log(np.tan(np.pi / 4 + phi / 2))
+        if name == "mercator":         # on the ellipsoid; Web Mercator takes the earth as a sphere
+            es = WGS84_E * np.sin(phi)
+            y = y + WGS84_E / 2 * np.log((1 - es) / (1 + es))
+        return lam, y
+    if name == "robinson":
+        a = np.abs(lat)
+        return 0.8487 * ROBINSON_PLEN(a) * lam, 1.3523 * ROBINSON_PDFE(a) * np.sign(lat)
+    if name == "mollweide":            # solve 2t + sin 2t = pi sin(phi) by Newton's method
+        t = 2 * phi
+        for _ in range(40):
+            d = 1 + np.cos(t)
+            t = t - np.where(d > 1e-12, (t + np.sin(t) - np.pi * np.sin(phi)) / np.maximum(d, 1e-12), 0)
+        t /= 2
+        return 2 * math.sqrt(2) / np.pi * lam * np.cos(t), math.sqrt(2) * np.sin(t)
+    if name == "winkel-tripel":        # standard parallel arccos(2 / pi)
+        alpha = np.arccos(np.clip(np.cos(phi) * np.cos(lam / 2), -1, 1))
+        sinc = np.where(alpha > 1e-12, np.sin(alpha) / np.maximum(alpha, 1e-12), 1.0)
+        return (0.5 * (lam * 2 / np.pi + 2 * np.cos(phi) * np.sin(lam / 2) / sinc),
+                0.5 * (phi + np.sin(phi) / sinc))
+    sys.exit(f"unknown projection '{name}'")
+
+
+def clip_half(p, c, sign):
+    """Sutherland-Hodgman: the part of the ring p (N x 2) where sign * (x - c) >= 0."""
+    inside = sign * (p[:, 0] - c) >= 0
+    if inside.all() or not inside.any():
+        return p if inside.all() else p[:0]
+    out = []
+    for a, b, ai, bi in zip(p, np.roll(p, -1, axis=0), inside, np.roll(inside, -1)):
+        if ai:
+            out.append(a)
+        if ai != bi:
+            out.append(a + (b - a) * (c - a[0]) / (b[0] - a[0]))
+    return np.array(out)
+
+
+def split_ring(ring, lon0):
+    """The lon/lat ring seen from the central meridian lon0: longitudes relative to
+    lon0, cut where the ring crosses the opposite meridian. {shift: ring}."""
+    if lon0 == 0:                      # Natural Earth already cuts the borders at 180 degrees
+        return {0: ring}
+    rel = (ring[:, 0] - lon0 + 180) % 360 - 180
+    if not (np.abs(np.diff(rel)) > 180).any():
+        return {0: np.c_[rel, ring[:, 1]]}
+    u = np.degrees(np.unwrap(np.radians(rel)))
+    out = {}
+    for k in (-360, 0, 360):
+        p = clip_half(clip_half(np.c_[u + k, ring[:, 1]], -180, 1), 180, -1)
+        if len(p) >= 3:
+            out[k] = p
+    return out
+
+
+def raster_shapes(shapes, gw, gh, T, centre):
+    """The polygons (largest first) on a gw x gh grid: cell (r, c) covers [c, c + 1) x
+    [r, r + 1). A country too thin to cover a cell gets one at its centre, for its label."""
     img = Image.new("I", (gw, gh), 0)
     draw = ImageDraw.Draw(img)
     for i, polys in shapes:
@@ -1340,13 +1489,75 @@ def layout_outlines(units, frame, lab, pix, y, x, pops, per_cell, rho_bar):
                 if len(hole) >= 3:
                     draw.polygon([tuple(p) for p in (hole - 0.5).tolist()], fill=0)
     G = np.array(img, dtype=np.int32)
-    present = np.bincount(G.ravel(), minlength=n + 1)
-    for i in range(1, n + 1):          # too thin to cover a cell: one cell for the label
+    present = np.bincount(G.ravel(), minlength=len(T))
+    for i in range(1, len(T)):
         if present[i] == 0 and T[i] > 0 and np.isfinite(centre[i]).all():
-            r, c = np.clip(np.rint(centre[i]).astype(int), 0, [gh - 1, gw - 1])
-            G[r, c] = i
-    log(f"  {gw}x{gh} cells of {fmt_num(per_cell, 0, TEXTS['en'])} people")
-    return G, T, centre, shapes
+            r, c = np.rint(centre[i]).astype(int)
+            if 0 <= r < gh and 0 <= c < gw:
+                G[r, c] = i
+    return G
+
+
+def layout_map(units, projection, lon0=0.0, view=None):
+    """Countries on a geographic map, in grid cells like the cartograms, so labels,
+    boxes and colours are placed the same way. view: (west, east, south, north) in
+    degrees to show only part of the world. Returns G, T (area in cells / 4, for the
+    label sizes), the label centres, the polygons (largest first), the outline of the
+    globe and the graticule (lines every 30 degrees)."""
+    n = len(units)
+    north = MERCATOR_LAT if projection in ("mercator", "web-mercator") else 90.0
+
+    def proj(lon, lat):
+        x, y = project(projection, lon, lat)
+        return np.c_[x, -y]                                  # rows grow downwards
+
+    t, la = np.linspace(-180, 180, 721), np.linspace(MAP_SOUTH, north, 300)
+    sphere = proj(np.r_[t, np.full_like(la, 180), t[::-1], np.full_like(la, -180)],
+                  np.r_[np.full_like(t, north), la[::-1], np.full_like(t, MAP_SOUTH), la])
+    if view:
+        west, east, south, top = view
+        g = np.meshgrid(np.linspace(west - lon0, east - lon0, 120), np.linspace(south, top, 120))
+        box = proj(g[0].ravel(), g[1].ravel())
+    else:
+        box = sphere
+    (x0, y0), (x1, y1) = box.min(axis=0), box.max(axis=0)
+    s = math.sqrt(MAP_CELLS / ((x1 - x0) * (y1 - y0)))
+    gw, gh = int(math.ceil((x1 - x0) * s)), int(math.ceil((y1 - y0) * s))
+
+    def grid(lon, lat):
+        return (proj(lon, lat) - [x0, y0]) * s
+
+    shapes, area = [], np.zeros(n + 1)
+    centre = np.full((n + 1, 2), np.nan)
+    for k, u in enumerate(units):
+        polys = []
+        for poly in u["polys"]:
+            parts = {}
+            for j, ring in enumerate(poly):
+                for shift, r in split_ring(densify(np.asarray(ring, float)[:, :2], 1.0), lon0).items():
+                    if j == 0:
+                        parts[shift] = [r]
+                    elif shift in parts:
+                        parts[shift].append(r)
+            for rings in parts.values():
+                polys.append([grid(r[:, 0], r[:, 1]) for r in rings])
+                area[k + 1] += ring_area(*polys[-1][0].T) - sum(ring_area(*h.T) for h in polys[-1][1:])
+        shapes.append((k + 1, polys))
+        lon, lat = u["label"]
+        centre[k + 1] = grid((lon - lon0 + 180) % 360 - 180, lat)[0, ::-1] - 0.5
+    shapes.sort(key=lambda e: -area[e[0]])
+    T = np.where(area > 0, np.maximum(np.rint(area / 4), 1), 0).astype(int)
+    T[0] = 0
+    G = raster_shapes(shapes, gw, gh, T, centre)
+
+    lines = []
+    for lon in range(-180, 180, 30):
+        rel = (lon - lon0 + 180) % 360 - 180
+        lines.append(grid(np.full(200, rel), np.linspace(MAP_SOUTH, north, 200)))
+    for lat in range(-30, int(north), 30):
+        lines.append(grid(t, np.full_like(t, lat)))
+    log(f"  {PROJECTIONS[projection]}, central meridian {lon0:g}: {gw}x{gh} cells")
+    return G, T, centre, shapes, (sphere - [x0, y0]) * s, lines
 
 
 # ---------------------------------------------------------------------------
@@ -1642,6 +1853,10 @@ def make_theme(pal, mode):
         "border": "#1b1b1b" if not dark_bg else "#0b0e13",
         # country outlines of --style outlines: pale on a light sea (like Worldmapper), the sea on a dark one
         "edge": mix(bg, "#ffffff", 0.75) if not dark_bg else mix(bg, "#000000", 0.15),
+        # --style map: the page around the globe, the graticule and the globe's outline
+        "page": mix(bg, "#ffffff", 0.7) if not dark_bg else mix(bg, "#000000", 0.35),
+        "graticule": mix(bg, label, 0.15),
+        "rim": mix(bg, label, 0.4),
     }
 
 
@@ -1668,7 +1883,7 @@ def thematic_colours(spec, th):
             d[chosen] = -1
             chosen.append(int(np.argmax(d)))
         return [pal[chosen[j % len(chosen)]] for j in range(k)]
-    ramp = th["ramps"][spec["ramp"]]
+    ramp = spec.get("stops") or th["ramps"][spec["ramp"]]
     if spec["ramp"] == "diverging":
         mid, nn = len(ramp) // 2, spec["neutral"]
         npos = k - nn - 1
@@ -1743,6 +1958,8 @@ def layout_title(tx, info, per_cell, cs, region=None):
     """Lines of the title box: (text, font size, bold, swatch colour or None)."""
     big = box_font(cs)
     year, proj = info["year"], info["projected"]
+    if info.get("style") == "map":
+        return map_title(tx, info, big, region)
     if region:
         title = tx["title_region_proj" if proj else "title_region"].format(region=region["name"], year=year)
     else:
@@ -1765,15 +1982,48 @@ def layout_title(tx, info, per_cell, cs, region=None):
             pct = fmt_num(100 * p / info["world"], 1, tx)
             lines.append((f"{name}: {fmt_pop(p, tx)} ({pct}%)", big * 0.38, False, None))
     lines.append(("", big * 0.25, False, None))
+    lines += source_lines(tx, info, big, region)
+    method = "base" if info["layout"] == "2018" else "outline_map" if outlines else "map"
+    lines.append((tx[method], big * 0.3, False, None))
+    return lines
+
+
+def source_lines(tx, info, big, region):
     if info["wb_years"]:
         un_names = region["owid"] if region else info["owid"]
         owid = tx["owid"].format(k=", ".join(un_names)) if un_names else ""
         key = "source_year" if info["year_given"] else "source"
-        lines.append((tx[key].format(years=info["wb_years"], owid=owid), big * 0.3, False, None))
+        return [(tx[key].format(years=info["wb_years"], owid=owid), big * 0.3, False, None)]
+    return [(tx["source_un"], big * 0.3, False, None)]
+
+
+def map_title(tx, info, big, region):
+    """Title box of --style map."""
+    year, proj = info["year"], info["projected"]
+    place = region["name"] if region else tx["world"]
+    if info["colour_what"] is None:
+        key = ("title_region_map" if region else "title_map") + ("_proj" if proj else "")
+        title = tx[key].format(region=place, year=year)
     else:
-        lines.append((tx["source_un"], big * 0.3, False, None))
-    method = "base" if info["layout"] == "2018" else "outline_map" if outlines else "map"
-    lines.append((tx[method], big * 0.3, False, None))
+        title = tx["title_map_by"].format(region=place, what=info["colour_what"])
+    lines = [(title, big, True, None)]
+    if info.get("breaks"):
+        lines.append((tx["map_scale"].format(n=info["classes"], breaks=tx["breaks"][info["breaks"]]),
+                      big * 0.42, False, None))
+    if region:
+        lines.append((tx["region_area"].format(total=fmt_pop(region["pop"], tx),
+                                               pct=fmt_num(100 * region["pop"] / info["world"], 1, tx)),
+                      big * 0.42, False, None))
+    else:
+        lines.append((tx["map_world"].format(total=fmt_pop(info["world"], tx)), big * 0.42, False, None))
+        lines.append(("", big * 0.25, False, None))
+        for cont, p in info["continents"]:
+            name = tx["continents"].get(cont, cont)
+            pct = fmt_num(100 * p / info["world"], 1, tx)
+            lines.append((f"{name}: {fmt_pop(p, tx)} ({pct}%)", big * 0.38, False, None))
+    lines.append(("", big * 0.25, False, None))
+    lines += source_lines(tx, info, big, region)
+    lines.append((tx["map_geo"].format(proj=PROJECTIONS[info["projection"]]), big * 0.3, False, None))
     return lines
 
 
@@ -1826,13 +2076,17 @@ def edge_width(cs):
 class RasterDrawer:
     SS = 3                                  # outlines are drawn this much larger, then reduced (antialiasing)
 
-    def __init__(self, G, cs, fills, gaps, shapes=None, edge=None):
+    def __init__(self, G, cs, fills, gaps, shapes=None, edge=None, globe=None):
         H, W = G.shape
         if shapes is not None:
             ss = self.SS
-            img = Image.new("RGB", (W * cs * ss, H * cs * ss), fills[0])
+            img = Image.new("RGB", (W * cs * ss, H * cs * ss), globe["page"] if globe else fills[0])
             d = ImageDraw.Draw(img)
             lw = max(1, round(edge_width(cs) * ss))
+            if globe:
+                d.polygon([tuple(p) for p in (globe["sphere"] * ss).tolist()], fill=fills[0])
+                for g in globe["graticule"]:
+                    d.line([tuple(p) for p in (g * ss).tolist()], fill=globe["graticule_colour"], width=lw)
             for i, polys in shapes:
                 for poly in polys:
                     rings = [[tuple(p) for p in (ring * ss).tolist()] for ring in poly]
@@ -1844,6 +2098,9 @@ class RasterDrawer:
                             d.polygon(hole, fill=fills[0])
                     for ring in rings:
                         d.line(ring + ring[:1], fill=edge, width=lw, joint="curve")
+            if globe:
+                ring = [tuple(p) for p in (globe["sphere"] * ss).tolist()]
+                d.line(ring + ring[:1], fill=globe["rim"], width=2 * lw, joint="curve")
             self.img = img.resize((W * cs, H * cs), Image.LANCZOS)
             self.draw = ImageDraw.Draw(self.img)
             return
@@ -1880,7 +2137,7 @@ class SvgDrawer:
     and population as <title>, so the file can be restyled or reused."""
     FONT = "Segoe UI, Arial, Helvetica, sans-serif"
 
-    def __init__(self, G, cs, fills, gaps, sea, grid, names, shapes=None, edge=None):
+    def __init__(self, G, cs, fills, gaps, sea, grid, names, shapes=None, edge=None, globe=None):
         H, W = G.shape
         self.w, self.h = W * cs, H * cs
         gap = max(1, cs // 9)
@@ -1888,21 +2145,26 @@ class SvgDrawer:
         p = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
              f'viewBox="0 0 {self.w} {self.h}">']
         if shapes is not None:
-            p.append(f'<rect width="100%" height="100%" fill="{fills[0]}"/>')
-            p.append(f'<g stroke="{edge}" stroke-width="{edge_width(cs):.2f}" stroke-linejoin="round">')
+            lw = edge_width(cs)
+            if globe:
+                p.append(f'<rect width="100%" height="100%" fill="{globe["page"]}"/>')
+                p.append(f'<path id="globe" fill="{fills[0]}" d="{svg_path([globe["sphere"]])}"/>')
+                d = "".join("M" + "L".join(f"{x:g} {y:g}" for x, y in np.round(g, 1).tolist())
+                            for g in globe["graticule"])
+                p.append(f'<path id="graticule" fill="none" stroke="{globe["graticule_colour"]}" '
+                         f'stroke-width="{lw:.2f}" d="{d}"/>')
+            else:
+                p.append(f'<rect width="100%" height="100%" fill="{fills[0]}"/>')
+            p.append(f'<g stroke="{edge}" stroke-width="{lw:.2f}" stroke-linejoin="round">')
             for i, polys in shapes:
-                d = []
-                for poly in polys:
-                    for ring in poly:
-                        r = np.round(ring, 1)
-                        keep = np.r_[True, (np.diff(r, axis=0) != 0).any(axis=1)]
-                        pts = r[keep].tolist()
-                        if len(pts) >= 3:
-                            d.append("M" + "L".join(f"{x:g} {y:g}" for x, y in pts) + "Z")
                 code, title = names[i]
                 p.append(f'<g id="{xml_escape(code)}"><title>{xml_escape(title)}</title>'
-                         f'<path fill="{fills[i]}" fill-rule="evenodd" d="{"".join(d)}"/></g>')
+                         f'<path fill="{fills[i]}" fill-rule="evenodd" '
+                         f'd="{svg_path([ring for poly in polys for ring in poly])}"/></g>')
             p.append("</g>")
+            if globe:
+                p.append(f'<path fill="none" stroke="{globe["rim"]}" stroke-width="{2 * lw:.2f}" '
+                         f'd="{svg_path([globe["sphere"]])}"/>')
             self.parts = p
             return
         if grid:
@@ -1950,6 +2212,18 @@ class SvgDrawer:
         return self.w, self.h
 
 
+def svg_path(rings):
+    """SVG path data for closed rings (N x 2), without repeated points."""
+    d = []
+    for ring in rings:
+        r = np.round(ring, 1)
+        keep = np.r_[True, (np.diff(r, axis=0) != 0).any(axis=1)]
+        pts = r[keep].tolist()
+        if len(pts) >= 3:
+            d.append("M" + "L".join(f"{x:g} {y:g}" for x, y in pts) + "Z")
+    return "".join(d)
+
+
 def xml_escape(s):
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace('"', "&quot;"))
@@ -1982,6 +2256,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     focus = region["members"] if region else None
     shapes = layout.get("shapes")
     off_r, off_c = layout.get("shape_off", (0, 0))
+    geo = layout.get("sphere") is not None          # --style map: every country is on the map
 
     def shown(i):
         return focus is None or i in focus
@@ -2013,7 +2288,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     title = wrap_lines(layout_title(tx, info, per_cell, cs, region), box_font(cs) * 22)
     legend = wrap_lines(legend_lines(tx, thematic, classes, cs), box_font(cs) * 22) if thematic else None
     small = [(units[k - 1]["name"], pops[k]) for k in range(1, n + 1)
-             if T[k] == 0 and pops[k] > 0 and shown(k)]
+             if T[k] == 0 and pops[k] > 0 and shown(k) and not geo]
     small.sort(key=lambda e: -e[1])
     small_head = tx["small" if shapes is None else "small_outline"].format(n=fmt_num(per_cell / 2, 0, tx))
     sfs = min(cs * 1.0, 26)
@@ -2101,12 +2376,18 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                      for i, polys in shapes]
     # thematic maps: neighbours may share a (pale) colour, so the outlines must stand out
     edge = mix(th["border"], th["bg"], 0.3) if thematic else th["edge"]
+    globe = None
+    if geo:
+        globe = {"page": th["page"], "rim": th["rim"], "graticule_colour": th["graticule"],
+                 "sphere": (layout["sphere"] + [off_c, off_r]) * cs,
+                 "graticule": [(g + [off_c, off_r]) * cs for g in layout["graticule"]]}
+        edge = mix(th["border"], th["bg"], 0.45)
     if out_path.lower().endswith(".svg"):
         names = {i: (units[i - 1]["code"], f"{units[i - 1]['name']} – {fmt_pop(pops[i], tx)}")
                  for i in range(1, n + 1)}
-        dr = SvgDrawer(G, cs, fills, gaps, sea, th["grid"], names, px_shapes, edge)
+        dr = SvgDrawer(G, cs, fills, gaps, sea, th["grid"], names, px_shapes, edge, globe)
     else:
-        dr = RasterDrawer(G, cs, fills, gaps, px_shapes, edge)
+        dr = RasterDrawer(G, cs, fills, gaps, px_shapes, edge, globe)
     if thematic and shapes is None:
         segs = border_segments(G, cs)
         dr.lines(segs, th["border"], max(1, cs // 6))
@@ -2155,7 +2436,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             if placed:
                 break
             fs *= 0.88
-        if not placed:
+        if not placed and not geo:          # a geographic map labels only what fits
             external.append(i)
 
     # --- labels outside, with a leader line. They may sit over other countries
@@ -2284,6 +2565,13 @@ def nice(v):
     return round(v, -int(math.floor(math.log10(abs(v)))) + 1)
 
 
+def nice1(v):
+    """Round to one significant digit."""
+    if v == 0:
+        return 0.0
+    return round(v, -int(math.floor(math.log10(abs(v)))))
+
+
 def thematic_spec(arg, units, T, tx, info, ctx):
     """Build the --color-by description used by render(): a class per country,
     legend labels, the ramp to colour them and the value shown in each label."""
@@ -2320,7 +2608,12 @@ def thematic_spec(arg, units, T, tx, info, ctx):
                 "what": tx["growth"].format(a=base, b=map_year), "value_text": text,
                 "missing": any(cls[i] < 0 for i in range(1, n + 1) if T[i] > 0)}
 
-    if arg.startswith("csv:"):
+    fmt = lambda v: fmt_value(v, tx)     # noqa: E731
+    if arg == "population":
+        data = {u["code"]: u["pop"] for u in units}
+        what = tx["population"]
+        fmt = lambda v: fmt_pop(v, tx) if v >= 1e3 else fmt_num(v, 0, tx)   # noqa: E731
+    elif arg.startswith("csv:"):
         path = arg[4:]
         data, what = {}, os.path.splitext(os.path.basename(path))[0]
         with open(path, encoding="utf-8-sig", newline="") as f:
@@ -2334,7 +2627,7 @@ def thematic_spec(arg, units, T, tx, info, ctx):
     else:
         code = INDICATORS.get(arg) or (arg[3:] if arg.startswith("wb:") else None)
         if not code:
-            sys.exit(f"--color-by: unknown value '{arg}' (use continent, growth[:YEAR], "
+            sys.exit(f"--color-by: unknown value '{arg}' (use population, continent, growth[:YEAR], "
                      f"{', '.join(INDICATORS)}, wb:CODE or csv:FILE)")
         raw = load_worldbank(code, ctx["cache"], ctx["offline"])
         data = {c: v for c, (v, y) in raw.items()}
@@ -2343,19 +2636,48 @@ def thematic_spec(arg, units, T, tx, info, ctx):
         if years:
             what += f", {years.most_common(1)[0][0]}"
     vals = {k + 1: data[u["code"]] for k, u in enumerate(units) if u["code"] in data}
-    on_map = np.array([v for i, v in vals.items() if T[i] > 0])
+    members = ctx.get("members")
+    on_map = np.array([v for i, v in vals.items() if T[i] > 0 and (members is None or i in members)])
     if len(on_map) == 0:
         sys.exit("--color-by: no values for the countries on the map")
-    edges = sorted(set(nice(q) for q in np.quantile(on_map, np.linspace(0, 1, 7)[1:-1])))
+    full = ctx.get("full_range", False)
+    method = ctx.get("breaks") or ("quantile" if not full else "log" if arg == "population" else "linear")
+    if method == "log" and on_map.min() <= 0:
+        log("  --breaks log needs values above zero; using linear")
+        method = "linear"
+    edges = class_edges(on_map, ctx.get("classes") or 6, method)
     for i, v in vals.items():
         cls[i] = int(np.digitize(v, edges))
-    lim = [fmt_value(e, tx) for e in edges]
-    labels = ([tx["below"].format(b=lim[0])]
-              + [tx["range"].format(a=lim[j], b=lim[j + 1]) for j in range(len(edges) - 1)]
-              + [tx["above"].format(a=lim[-1])])
+    if full:                 # every class as a range, from the lowest to the highest value
+        lim = [fmt(v) for v in [on_map.min()] + edges + [on_map.max()]]
+        labels = [tx["range"].format(a=lim[j], b=lim[j + 1]) for j in range(len(edges) + 1)]
+    else:
+        lim = [fmt(e) for e in edges]
+        labels = ([tx["below"].format(b=lim[0])]
+                  + [tx["range"].format(a=lim[j], b=lim[j + 1]) for j in range(len(edges) - 1)]
+                  + [tx["above"].format(a=lim[-1])])
     return {"kind": "binned", "ramp": "sequential", "cls": cls, "labels": labels, "what": what,
-            "value_text": {i: fmt_value(v, tx) for i, v in vals.items()},
+            "breaks": method, "stops": ctx.get("stops"),
+            "value_text": None if arg == "population" else {i: fmt_value(v, tx) for i, v in vals.items()},
             "missing": any(cls[i] < 0 for i in range(1, n + 1) if T[i] > 0)}
+
+
+def class_edges(v, k, method):
+    """Limits between k classes of the values v: equal steps between the lowest
+    and the highest value (linear, or log for very uneven values like population),
+    or the same number of countries in each class (quantile). Rounded to one or
+    two significant digits."""
+    lo, hi = float(v.min()), float(v.max())
+    if method == "log":
+        e = np.exp(np.linspace(math.log(lo), math.log(hi), k + 1))[1:-1]
+    elif method == "linear":
+        e = np.linspace(lo, hi, k + 1)[1:-1]
+    else:
+        e = np.quantile(v, np.linspace(0, 1, k + 1)[1:-1])
+    one = sorted(set(nice1(q) for q in e))
+    if method == "log" and len(one) == len(e):
+        return one
+    return sorted(set(nice(q) for q in e))
 
 
 def crop_region(layout, region_key, tx):
@@ -2381,14 +2703,19 @@ def crop_region(layout, region_key, tx):
     ylo, yhi, xlo, xhi = ys.min(), ys.max(), xs.min(), xs.max()
     r0, r1 = max(ylo - m, 0), min(yhi + m + 1, G.shape[0])
     c0, c1 = max(xlo - m, 0), min(xhi + m + 1, G.shape[1])
-    name = tx["continents"]["Americas"] if region_key == "americas" else tx["continents"][conts[0]]
     off_r, off_c = layout["shape_off"]
     out = dict(layout, G=G[r0:r1, c0:c1].copy(), centre=layout["centre"] - [r0, c0],
                shape_off=(off_r - r0, off_c - c0))
-    region = {"name": name, "members": members, "cells": int(sum(T[i] for i in members)),
-              "pop": float(sum(pops[i] for i in members)),
-              "owid": sorted(units[i - 1]["name"] for i in members if units[i - 1]["source"].startswith("UN WPP"))}
-    return out, region
+    return out, region_summary(region_key, units, T, pops, tx)
+
+
+def region_summary(region_key, units, T, pops, tx):
+    conts = REGIONS[region_key]
+    members = {k + 1 for k, u in enumerate(units) if u["continent"] in conts}
+    name = tx["continents"]["Americas"] if region_key == "americas" else tx["continents"][conts[0]]
+    return {"name": name, "members": members, "cells": int(sum(T[i] for i in members)),
+            "pop": float(sum(pops[i] for i in members)),
+            "owid": sorted(units[i - 1]["name"] for i in members if units[i - 1]["source"].startswith("UN WPP"))}
 
 
 def main(argv=None):
@@ -2397,12 +2724,26 @@ def main(argv=None):
     ap.add_argument("--palette", metavar="NAME", help="colour palette from the palette file (default: the file's default)")
     ap.add_argument("--palettes", metavar="FILE", help="palette file (default: palettes.json next to this script)")
     ap.add_argument("--list-palettes", action="store_true", help="list the palettes, check them and exit")
-    ap.add_argument("--style", choices=["squares", "outlines"], default="squares",
+    ap.add_argument("--style", choices=["squares", "outlines", "map"], default="squares",
                     help="squares = one square per --per-cell people (default); outlines = smooth country "
-                         "outlines with areas proportional to population, like Worldmapper")
+                         "outlines with areas proportional to population, like Worldmapper; map = ordinary "
+                         "geographic map, countries coloured by population (or --color-by)")
     ap.add_argument("--layout", choices=["2018", "auto"],
                     help="2018 = Max Roser's 2018 layout updated to the latest figures (default for squares); "
                          "auto = computed from the geographic map (always used for outlines)")
+    ap.add_argument("--projection", choices=list(PROJECTIONS), default="equal-earth",
+                    help="projection of --style map (default: %(default)s)")
+    ap.add_argument("--central-meridian", type=float, metavar="DEG",
+                    help="centre longitude of --style map (default: 0, or the middle of --region)")
+    ap.add_argument("--classes", type=int, metavar="N",
+                    help="number of colour classes for values (default: 7 on --style map, 6 otherwise)")
+    ap.add_argument("--breaks", choices=["log", "linear", "quantile"],
+                    help="class limits: equal steps from the lowest to the highest value (log or linear) or "
+                         "the same number of countries per class (quantile). Default on --style map: log for "
+                         "population, linear for the rest; quantile otherwise")
+    ap.add_argument("--ramp", metavar="NAME",
+                    help=f"colour scale for values: palette (the palette's own), {', '.join(RAMPS)}; "
+                         "add _r to reverse it (default: palette)")
     ap.add_argument("--year", type=int, help="population of this year instead of the latest; years after the "
                                              "latest figures use the UN projection (up to 2100)")
     ap.add_argument("--region", choices=sorted(REGIONS), help="draw only this region, with bigger squares")
@@ -2446,7 +2787,20 @@ def main(argv=None):
         if a.layout == "2018":
             ap.error("--style outlines deforms the geographic map; it cannot use the 2018 layout")
         a.layout = "auto"
+    if a.style == "map":
+        if a.layout:
+            ap.error("--style map draws the geographic map; --layout is only for the cartograms")
+        a.layout = "map"
+        a.color_by = a.color_by or "population"
     a.layout = a.layout or "2018"
+    if a.classes is not None and not 2 <= a.classes <= 12:
+        ap.error("--classes must be between 2 and 12")
+    stops = None
+    if a.ramp and a.ramp != "palette":
+        name = a.ramp[:-2] if a.ramp.endswith("_r") else a.ramp
+        if name not in RAMPS:
+            ap.error(f"unknown ramp '{a.ramp}'; available: palette, {', '.join(RAMPS)} (add _r to reverse)")
+        stops = RAMPS[name][::-1] if a.ramp.endswith("_r") else RAMPS[name]
     if a.layout == "2018" and a.per_cell != 500_000:
         ap.error("the 2018 layout has 500,000 people per square; use --layout auto for other values")
     if a.year is not None and not 1950 <= a.year <= 2100:
@@ -2471,10 +2825,18 @@ def main(argv=None):
     if world is None:
         world = float(pops.sum())
 
-    shapes = None
+    shapes = sphere = graticule = None
     if a.layout == "2018":
         log("updating the 2018 layout")
         G, T, centre = layout_2018(units, pops, a.per_cell, a.cache, a.offline)
+    elif a.layout == "map":
+        log("projecting the map")
+        lon0, view = 0.0, None
+        if a.region:
+            lon0, *view = REGION_VIEW[a.region]
+        if a.central_meridian is not None:
+            lon0 = (a.central_meridian + 180) % 360 - 180
+        G, T, centre, shapes, sphere, graticule = layout_map(units, a.projection, lon0, view)
     else:
         places = load_places(a.cache, a.offline)
         log("rasterising the map")
@@ -2522,34 +2884,48 @@ def main(argv=None):
         "wb_years": ", ".join(f"{y}" for y, _ in sorted(wb_years.items(), reverse=True)),
         "owid": owid, "world": world, "cells": int(T.sum()), "layout": a.layout, "style": a.style,
         "continents": [(c, p) for c, p in conts.most_common() if c in TEXTS["en"]["continents"]],
+        "projection": a.projection,
     }
     layout = {"G": G, "T": T, "centre": centre, "units": units, "pops": pops, "info": info,
-              "per_cell": a.per_cell, "shapes": shapes, "shape_off": (0, 0)}
+              "per_cell": a.per_cell, "shapes": shapes, "shape_off": (0, 0),
+              "sphere": sphere, "graticule": graticule}
 
     if a.csv:
         with open(a.csv, "w", encoding="utf-8", newline="") as f:
             wr = csv.writer(f)
-            wr.writerow(["iso3", "name", "continent", "population", "year", "source", "squares"])
+            wr.writerow(["iso3", "name", "continent", "population", "year", "source"]
+                        + (["squares"] if a.style != "map" else []))
             for k, u in enumerate(units):
-                wr.writerow([u["code"], u["name"], u["continent"], int(u["pop"]), u["year"], u["source"],
-                             int((G == k + 1).sum())])
+                wr.writerow([u["code"], u["name"], u["continent"], int(u["pop"]), u["year"], u["source"]]
+                            + ([int((G == k + 1).sum())] if a.style != "map" else []))
         log(f"saved {a.csv}")
 
+    region = None
+    if a.region and a.style == "map":            # the map is already drawn for the region
+        region = region_summary(a.region, units, T, pops, tx)
     thematic = None
     if a.color_by:
-        ctx = {"cache": a.cache, "offline": a.offline, "source": a.source, "layout": a.layout}
+        ctx = {"cache": a.cache, "offline": a.offline, "source": a.source, "layout": a.layout,
+               "classes": a.classes or (7 if a.style == "map" else None), "breaks": a.breaks,
+               "stops": stops, "full_range": a.style == "map",
+               "members": region["members"] if region else None}
         thematic = thematic_spec(a.color_by, units, T, tx, info, ctx)
+        info["colour_what"] = None if a.color_by == "population" else thematic["what"]
+        info["breaks"], info["classes"] = thematic.get("breaks"), len(thematic["labels"])
         log(f"colouring by {thematic['what']}")
-    region = None
-    if a.region:
+    if a.region and a.style != "map":
         layout, region = crop_region(layout, a.region, tx)
-    cs = a.cell_px or (int(np.clip(round(3200 / layout["G"].shape[1]), 10, 40)) if region else 10)
+    if a.style == "map":
+        cs = a.cell_px or MAP_CELL_PX
+    else:
+        cs = a.cell_px or (int(np.clip(round(3200 / layout["G"].shape[1]), 10, 40)) if region else 10)
 
     modes = ["light", "dark"] if a.theme == "both" else [a.theme]
     for mode in modes:
         for w in palette_warnings(pal_name, mode, pals[pal_name][mode]):
             log("  warning: " + w)
-        out = a.output or ("population_cartogram" + (f"_{a.region}" if a.region else "") + ".png")
+        out = a.output or (("population_map" if a.style == "map" else "population_cartogram")
+                           + (f"_{a.region}" if a.region else "") + ".png")
         root, ext = os.path.splitext(out)
         if a.theme == "both" or not a.output:
             out = f"{root}_{mode}{ext or '.png'}"

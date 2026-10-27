@@ -42,6 +42,9 @@ Este mapa não existiria sem:
   N. R. Chrisman e D. R. Niemeyer, *An algorithm to construct continuous area cartograms*,
   The Professional Geographer 37 (1985).
 - **Paleta para daltónicos**: Okabe & Ito e Paul Tol.
+- **Estilo de mapa**: projeções Equal Earth (Šavrič, Patterson & Jenny, 2018), Robinson (1963),
+  Winkel Tripel (1921), Mollweide (1805) e Mercator. Escalas de cor: Viridis, Magma e Cividis
+  (matplotlib), Turbo (Google, usada em `rainbow`) e ColorBrewer (Cynthia Brewer).
 
 ## Utilização
 
@@ -55,6 +58,7 @@ pip install numpy scipy pillow
 python population_cartogram.py --theme both --lang pt -o mapa.png     # mapa_light.png + mapa_dark.png
 python population_cartogram.py --theme dark --palette pastel
 python population_cartogram.py --style outlines --theme dark          # contornos, ao estilo Worldmapper
+python population_cartogram.py --style map --projection robinson       # mapa normal, pintado pela população
 python population_cartogram.py --year 2050 --theme dark                # projeção da ONU
 python population_cartogram.py --region europe --theme dark            # um continente, quadrados maiores
 python population_cartogram.py --color-by gdp                          # mapa temático
@@ -83,6 +87,40 @@ Todas as outras opções funcionam da mesma forma: `--year`, `--region`, `--colo
 ![África por esperança de vida, contornos](examples/africa_2025_outlines_life.png)
 
 A primeira execução de cada ano demora alguns minutos; o resultado fica em cache.
+
+### Um mapa normal em vez de um cartograma
+
+Os cartogramas de anos distantes ficam muito distorcidos: em 2050, e mais ainda em 2100, a África e
+o Sul da Ásia incham e os continentes perdem a forma. `--style map` desenha o mapa geográfico
+habitual, com os países pintados pela população numa escala que vai do país mais pequeno ao maior:
+
+```bash
+python population_cartogram.py --style map --lang pt                            # Equal Earth, 7 classes
+python population_cartogram.py --style map --projection robinson --year 2100 --ramp rainbow --classes 9
+python population_cartogram.py --style map --region europe --color-by life --ramp viridis
+```
+
+![População mundial 2025, projeção Equal Earth](examples/world_2025_map_equal_earth.png)
+
+![População mundial 2100, projeção Robinson, escala arco-íris](examples/mundo_2100_mapa_robinson_pt.png)
+
+- **Projeções** (`--projection`): `equal-earth` (padrão; equivalente, por isso não exagera os países
+  grandes), `robinson`, `winkel-tripel` (a dos mapas-mundo da National Geographic), `mollweide`
+  (equivalente), `mercator` e `web-mercator` (mapas online; aumentam muito a Gronelândia, o Canadá
+  e a Rússia). `--central-meridian 150` centra o mapa no Pacífico.
+- **Classes** (`--classes N`, 2 a 12, padrão 7): a escala vai do menor ao maior valor dos países
+  mostrados. `--breaks log` (padrão para a população, que vai de umas centenas de pessoas a 1,4 mil
+  milhões) faz passos iguais numa escala logarítmica; `linear` (padrão para os outros valores) passos
+  iguais; `quantile` o mesmo número de países em cada classe.
+- **Cores** (`--ramp`): `palette` (a escala da própria paleta, padrão), gradientes `blues`,
+  `greens`, `reds`, `ylorrd`, `ylgnbu`, as perceptualmente uniformes `viridis`, `magma` e
+  `cividis` (legíveis por daltónicos) e as escalas arco-íris `rainbow` (Turbo) e `spectral`.
+  Acrescenta `_r` para inverter, p. ex. `viridis_r`.
+- `--region`, `--year`, `--color-by`, `--theme`, `--lang` e o SVG funcionam como nos cartogramas.
+
+![Europa por esperança de vida, estilo mapa](examples/europe_2025_map_life.png)
+
+`--classes`, `--breaks` e `--ramp` também funcionam nos cartogramas com `--color-by`.
 
 ### Anos passados e futuros
 
@@ -137,11 +175,16 @@ o ficheiro poder ser reestilizado ou reutilizado numa página web. Ver
 | `--palette NOME` | Paleta de cores de `palettes.json` (padrão: `classic`) |
 | `--palettes FICHEIRO` | Usar outro ficheiro de paletas |
 | `--list-palettes` | Lista as paletas, procura cores parecidas e termina |
-| `--style squares\|outlines` | `squares` (padrão): um quadrado por 500 000 pessoas. `outlines`: contornos dos países com área proporcional à população |
+| `--style squares\|outlines\|map` | `squares` (padrão): um quadrado por 500 000 pessoas. `outlines`: contornos dos países com área proporcional à população. `map`: mapa geográfico normal pintado pela população |
 | `--layout 2018\|auto` | Só quadrados. `2018` (padrão): disposição de 2018 atualizada. `auto`: calcula um cartograma novo a partir do mapa geográfico |
+| `--projection NOME` | Só `--style map`: `equal-earth` (padrão), `mercator`, `web-mercator`, `winkel-tripel`, `robinson`, `mollweide` |
+| `--central-meridian GRAUS` | Só `--style map`: longitude ao centro (padrão 0, ou o meio da `--region`) |
+| `--classes N` | Número de classes de cor, 2–12 (padrão 7 em `--style map`, 6 nos outros) |
+| `--breaks log\|linear\|quantile` | Como se cortam as classes (padrão: `log` para a população e `linear` para os outros valores em `--style map`; `quantile` nos cartogramas) |
+| `--ramp NOME` | Escala de cor: `palette`, `viridis`, `magma`, `cividis`, `blues`, `greens`, `reds`, `ylorrd`, `ylgnbu`, `rainbow`, `spectral`; `_r` inverte-a |
 | `--year AAAA` | População desse ano (1950–2100); depois dos números mais recentes, a projeção da ONU |
 | `--region NOME` | Só um continente: `africa`, `asia`, `europe`, `north-america`, `south-america`, `americas`, `oceania` |
-| `--color-by O_QUÊ` | Mapa temático: `continent`, `growth[:ANO]`, `gdp`, `life`, `fertility`, `urban`, `density`, `wb:CÓDIGO`, `csv:FICHEIRO` |
+| `--color-by O_QUÊ` | Mapa temático: `population`, `continent`, `growth[:ANO]`, `gdp`, `life`, `fertility`, `urban`, `density`, `wb:CÓDIGO`, `csv:FICHEIRO` |
 | `--lang en\|pt\|es` | Idioma dos textos e dos nomes dos países (padrão: o do sistema) |
 | `-o FICHEIRO` | Ficheiro de saída, `.png`, `.svg` ou `.pdf` |
 | `--per-cell N` | Pessoas por quadrado (padrão 500 000; outros valores só com `--layout auto`) |
@@ -186,12 +229,20 @@ corre numa grelha grosseira e apara um pouco as costas e as ilhas, por isso uma 
 algoritmo de Dougenik–Chrisman–Niemeyer acerta os contornos até a área de cada país corresponder
 à sua população (erro mediano abaixo de 0,1%).
 
+**Mapa (`--style map`).** As fronteiras do Natural Earth são projetadas diretamente, sem deformação.
+Os segmentos são primeiro densificados a 1° para as fronteiras retas curvarem bem nas projeções
+curvas, e com outro meridiano central os polígonos são cortados onde atravessam o meridiano oposto.
+O contorno do globo, uma quadrícula de 30° e os países são desenhados como vetores (com
+antialiasing no PNG).
+
 **Cores.** Cada país recebe a cor da paleta que mais se distingue (diferença de cor CIEDE2000) das
 cores dos vizinhos, para que vizinhos nunca tenham a mesma cor nem tons quase iguais.
 
 ## Limitações
 
-- Formas e posições são aproximadas: é um cartograma, não um mapa.
+- Formas e posições são aproximadas: é um cartograma, não um mapa (exceto com `--style map`).
+- Em `--style map` os países muito pequenos (Singapura, Malta, ilhas do Pacífico) mal se veem e só
+  têm legenda os países onde ela cabe; a Antártida fica de fora.
 - Na disposição de 2018, as zonas que mais cresceram (África Ocidental, sul da Índia) ficam
   visivelmente mais salientes, e quanto mais longe de 2018 mais as formas se afastam do original:
   em 2050 a África fica muito mais redonda, e recuar até 2000 deixa alguns países recortados.
