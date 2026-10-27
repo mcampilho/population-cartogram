@@ -42,7 +42,9 @@ This map would not exist without:
   The Professional Geographer 37 (1985).
 - **Colour-blind palette**: Okabe & Ito and Paul Tol.
 - **Map style**: Equal Earth (Šavrič, Patterson & Jenny, 2018), Robinson (1963), Winkel Tripel
-  (1921), Mollweide (1805) and Mercator projections. Colour ramps: Viridis, Magma and Cividis
+  (1921), Mollweide (1805), Mercator, Miller (1942), Gall–Peters (Gall 1855, Peters 1973) and
+  equirectangular projections. Natural breaks: G. F. Jenks (1967), computed exactly with
+  W. D. Fisher's method (1958). Colour ramps: Viridis, Magma and Cividis
   (matplotlib), Turbo (Google, used for `rainbow`) and ColorBrewer (Cynthia Brewer).
 
 ## Usage
@@ -106,11 +108,17 @@ python population_cartogram.py --style map --region europe --color-by life --ram
 - **Projections** (`--projection`): `equal-earth` (default; equal-area, so large countries are
   not exaggerated), `robinson`, `winkel-tripel` (National Geographic's world maps), `mollweide`
   (equal-area), `mercator` and `web-mercator` (online maps; they greatly enlarge Greenland,
-  Canada and Russia). `--central-meridian 150` centres the map on the Pacific.
+  Canada and Russia), `miller` (Mercator toned down so the poles fit), `gall-peters`
+  (equal-area, stretched north–south in the tropics) and `equirectangular` (plate carrée:
+  longitude and latitude as a plain grid). `--central-meridian 150` centres the map on the Pacific.
 - **Classes** (`--classes N`, 2 to 12, default 7): the scale runs from the lowest to the highest
-  value of the countries shown. `--breaks log` (default for population, which goes from a few
-  hundred people to 1.4 billion) makes equal steps on a logarithmic scale; `linear` (default for
-  other values) equal steps; `quantile` the same number of countries in every class.
+  value of the countries shown. `--breaks quantile` (default) ranks the countries and gives every
+  class the same number of them — with 233 countries and 9 classes, 26 in each — so no class is
+  left empty; each limit is the roundest number between the last country of one class and the
+  first of the next. `jenks` (natural breaks) puts the limits in the widest gaps between values,
+  keeping similar countries together (on a logarithmic scale for positive values). `log` and
+  `linear` make equal steps; with values as uneven as population, most countries fall in a few
+  classes and some classes may stay empty (the log says how many).
 - **Colours** (`--ramp`): `palette` (the palette's own ramp, default), gradients `blues`,
   `greens`, `reds`, `ylorrd`, `ylgnbu`, the perceptually uniform `viridis`, `magma` and `cividis`
   (also readable by colour-blind people), and the rainbow scales `rainbow` (Turbo) and
@@ -176,10 +184,10 @@ tooltip, so the file can be restyled or reused on a web page. See
 | `--list-palettes` | List the palettes, check them for colours that look alike, and exit |
 | `--style squares\|outlines\|map` | `squares` (default): one square per 500,000 people. `outlines`: smooth country outlines with areas proportional to population. `map`: ordinary geographic map coloured by population |
 | `--layout 2018\|auto` | Squares only. `2018` (default): the 2018 layout updated to the latest figures. `auto`: compute a new cartogram from the geographic map |
-| `--projection NAME` | `--style map` only: `equal-earth` (default), `mercator`, `web-mercator`, `winkel-tripel`, `robinson`, `mollweide` |
+| `--projection NAME` | `--style map` only: `equal-earth` (default), `mercator`, `web-mercator`, `winkel-tripel`, `robinson`, `mollweide`, `miller`, `gall-peters`, `equirectangular` |
 | `--central-meridian DEG` | `--style map` only: longitude at the centre (default 0, or the middle of `--region`) |
 | `--classes N` | Number of colour classes, 2–12 (default 7 on `--style map`, 6 otherwise) |
-| `--breaks log\|linear\|quantile` | How the classes are cut (default: `log` for population and `linear` for other values on `--style map`; `quantile` on the cartograms) |
+| `--breaks quantile\|jenks\|log\|linear` | How the classes are cut: same number of countries per class (`quantile`, default), natural breaks (`jenks`) or equal steps (`log`, `linear`) |
 | `--ramp NAME` | Colour scale: `palette`, `viridis`, `magma`, `cividis`, `blues`, `greens`, `reds`, `ylorrd`, `ylgnbu`, `rainbow`, `spectral`; `_r` reverses it |
 | `--year YYYY` | Population of that year (1950–2100); after the latest figures, the UN projection |
 | `--region NAME` | Only one continent: `africa`, `asia`, `europe`, `north-america`, `south-america`, `americas`, `oceania` |

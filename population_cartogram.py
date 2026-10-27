@@ -163,7 +163,8 @@ TEXTS = {
         "title_map_by": "{region}: {what}",
         "world": "World",
         "map_scale": "{n} colour classes from the lowest to the highest value ({breaks} scale).",
-        "breaks": {"log": "logarithmic", "linear": "linear", "quantile": "quantile"},
+        "breaks": {"log": "logarithmic", "linear": "linear", "quantile": "quantile",
+                   "jenks": "Jenks natural breaks"},
         "map_world": "World population: {total}.",
         "map_geo": "Map: Natural Earth, {proj} projection.",
         "population": "population",
@@ -211,7 +212,8 @@ TEXTS = {
         "title_map_by": "{region}: {what}",
         "world": "Mundo",
         "map_scale": "{n} classes de cor, do menor ao maior valor (escala {breaks}).",
-        "breaks": {"log": "logarítmica", "linear": "linear", "quantile": "por quantis"},
+        "breaks": {"log": "logarítmica", "linear": "linear", "quantile": "por quantis",
+                   "jenks": "de quebras naturais de Jenks"},
         "map_world": "População mundial: {total}.",
         "map_geo": "Mapa: Natural Earth, projeção {proj}.",
         "population": "população",
@@ -259,7 +261,8 @@ TEXTS = {
         "title_map_by": "{region}: {what}",
         "world": "Mundo",
         "map_scale": "{n} clases de color, del menor al mayor valor (escala {breaks}).",
-        "breaks": {"log": "logarítmica", "linear": "lineal", "quantile": "por cuantiles"},
+        "breaks": {"log": "logarítmica", "linear": "lineal", "quantile": "por cuantiles",
+                   "jenks": "de cortes naturales de Jenks"},
         "map_world": "Población mundial: {total}.",
         "map_geo": "Mapa: Natural Earth, proyección {proj}.",
         "population": "población",
@@ -1394,7 +1397,8 @@ def layout_outlines(units, frame, lab, pix, y, x, pops, per_cell, rho_bar):
 # Geographic map (--style map): undistorted countries coloured by a value
 # ---------------------------------------------------------------------------
 PROJECTIONS = {"equal-earth": "Equal Earth", "mercator": "Mercator", "web-mercator": "Web Mercator",
-               "winkel-tripel": "Winkel Tripel", "robinson": "Robinson", "mollweide": "Mollweide"}
+               "winkel-tripel": "Winkel Tripel", "robinson": "Robinson", "mollweide": "Mollweide",
+               "equirectangular": "Equirectangular", "miller": "Miller", "gall-peters": "Gall–Peters"}
 MERCATOR_LAT = 85.0511                 # Web Mercator's limit (the whole map is a square)
 WGS84_E = 0.0818191908426              # eccentricity of the WGS 84 ellipsoid
 # Robinson's table: length of the parallel and distance from the equator, every 5 degrees
@@ -1427,6 +1431,12 @@ def project(name, lon, lat):
             es = WGS84_E * np.sin(phi)
             y = y + WGS84_E / 2 * np.log((1 - es) / (1 + es))
         return lam, y
+    if name == "equirectangular":      # plate carree: longitude and latitude as they are
+        return lam, phi
+    if name == "miller":               # Mercator with latitudes * 0.8, so the poles fit
+        return lam, 1.25 * np.log(np.tan(np.pi / 4 + 0.4 * phi))
+    if name == "gall-peters":          # cylindrical equal-area, true scale at 45 degrees
+        return lam * math.cos(math.pi / 4), np.sin(phi) / math.cos(math.pi / 4)
     if name == "robinson":
         a = np.abs(lat)
         return 0.8487 * ROBINSON_PLEN(a) * lam, 1.3523 * ROBINSON_PDFE(a) * np.sign(lat)
@@ -2641,7 +2651,7 @@ def thematic_spec(arg, units, T, tx, info, ctx):
     if len(on_map) == 0:
         sys.exit("--color-by: no values for the countries on the map")
     full = ctx.get("full_range", False)
-    method = ctx.get("breaks") or ("quantile" if not full else "log" if arg == "population" else "linear")
+    method = ctx.get("breaks") or "quantile"
     if method == "log" and on_map.min() <= 0:
         log("  --breaks log needs values above zero; using linear")
         method = "linear"
@@ -2665,19 +2675,73 @@ def thematic_spec(arg, units, T, tx, info, ctx):
 def class_edges(v, k, method):
     """Limits between k classes of the values v: equal steps between the lowest
     and the highest value (linear, or log for very uneven values like population),
-    or the same number of countries in each class (quantile). Rounded to one or
-    two significant digits."""
+    the same number of countries in each class (quantile) or the groups that keep
+    similar values together (jenks, on the logarithm of positive values). Rounded to one or two significant digits;
+    quantile and jenks limits are the roundest number between the two countries
+    on either side, so no country changes class."""
     lo, hi = float(v.min()), float(v.max())
+    if method in ("quantile", "jenks"):
+        s = np.sort(np.asarray(v, float))
+        if method == "quantile":     # rank the countries and cut every len / k places
+            cut = np.rint(np.arange(1, k) * len(s) / k).astype(int)
+        else:                        # on the logarithm when it can, or China and India get classes alone
+            cut = jenks_cuts(np.log(s) if lo > 0 else s, k)
+        edges = sorted(set(roundest(s[c - 1], s[c]) for c in cut if 0 < c < len(s) and s[c - 1] < s[c]))
+        empty = k - 1 - len(edges)
+        if empty:
+            log(f"  {empty} class limit(s) dropped: too many countries share the same value")
+        return edges
     if method == "log":
         e = np.exp(np.linspace(math.log(lo), math.log(hi), k + 1))[1:-1]
-    elif method == "linear":
-        e = np.linspace(lo, hi, k + 1)[1:-1]
     else:
-        e = np.quantile(v, np.linspace(0, 1, k + 1)[1:-1])
+        e = np.linspace(lo, hi, k + 1)[1:-1]
     one = sorted(set(nice1(q) for q in e))
-    if method == "log" and len(one) == len(e):
-        return one
-    return sorted(set(nice(q) for q in e))
+    edges = one if method == "log" and len(one) == len(e) else sorted(set(nice(q) for q in e))
+    used = len(set(np.digitize(v, edges)))
+    if used < len(edges) + 1:
+        log(f"  {len(edges) + 1 - used} of {len(edges) + 1} classes have no country; "
+            "--breaks quantile or jenks fill them all")
+    return edges
+
+
+def roundest(a, b):
+    """The number with the fewest significant digits in (a, b]."""
+    if a < 0 <= b:
+        return 0.0
+    top = math.floor(math.log10(max(abs(a), abs(b))))
+    for d in range(17):
+        x = (math.floor(a / 10.0 ** (top - d)) + 1) * 10.0 ** (top - d)
+        if x <= b:
+            return float(f"{x:.{max(0, d - top)}f}")
+    return b
+
+
+def jenks_cuts(s, k):
+    """Fisher-Jenks natural breaks of the sorted values s: the k groups with the
+    smallest total squared distance to their own mean. Returns the index where
+    each group after the first starts."""
+    n = len(s)
+    k = min(k, n)
+    c1, c2 = np.r_[0, np.cumsum(s)], np.r_[0, np.cumsum(s * s)]
+
+    def cost(i, j):                  # values s[i:j], vectorised over i
+        m = j - i
+        return c2[j] - c2[i] - (c1[j] - c1[i]) ** 2 / m
+
+    best = np.full((k + 1, n + 1), np.inf)
+    start = np.zeros((k + 1, n + 1), int)
+    best[1, 1:] = [cost(0, j) for j in range(1, n + 1)]
+    for g in range(2, k + 1):
+        for j in range(g, n + 1):
+            i = np.arange(g - 1, j)
+            tot = best[g - 1, i] + cost(i, j)
+            b = int(np.argmin(tot))
+            best[g, j], start[g, j] = tot[b], i[b]
+    cuts, j = [], n
+    for g in range(k, 1, -1):
+        j = start[g, j]
+        cuts.append(j)
+    return cuts[::-1]
 
 
 def crop_region(layout, region_key, tx):
@@ -2737,10 +2801,10 @@ def main(argv=None):
                     help="centre longitude of --style map (default: 0, or the middle of --region)")
     ap.add_argument("--classes", type=int, metavar="N",
                     help="number of colour classes for values (default: 7 on --style map, 6 otherwise)")
-    ap.add_argument("--breaks", choices=["log", "linear", "quantile"],
-                    help="class limits: equal steps from the lowest to the highest value (log or linear) or "
-                         "the same number of countries per class (quantile). Default on --style map: log for "
-                         "population, linear for the rest; quantile otherwise")
+    ap.add_argument("--breaks", choices=["quantile", "jenks", "log", "linear"],
+                    help="class limits: the same number of countries per class (quantile, default), natural "
+                         "groups of similar values (jenks), or equal steps from the lowest to the highest "
+                         "value (log or linear; some classes may have no country)")
     ap.add_argument("--ramp", metavar="NAME",
                     help=f"colour scale for values: palette (the palette's own), {', '.join(RAMPS)}; "
                          "add _r to reverse it (default: palette)")

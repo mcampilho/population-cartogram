@@ -43,7 +43,9 @@ Este mapa não existiria sem:
   The Professional Geographer 37 (1985).
 - **Paleta para daltónicos**: Okabe & Ito e Paul Tol.
 - **Estilo de mapa**: projeções Equal Earth (Šavrič, Patterson & Jenny, 2018), Robinson (1963),
-  Winkel Tripel (1921), Mollweide (1805) e Mercator. Escalas de cor: Viridis, Magma e Cividis
+  Winkel Tripel (1921), Mollweide (1805), Mercator, Miller (1942), Gall–Peters (Gall 1855,
+  Peters 1973) e equirretangular. Quebras naturais: G. F. Jenks (1967), calculadas de forma exata
+  com o método de W. D. Fisher (1958). Escalas de cor: Viridis, Magma e Cividis
   (matplotlib), Turbo (Google, usada em `rainbow`) e ColorBrewer (Cynthia Brewer).
 
 ## Utilização
@@ -107,11 +109,17 @@ python population_cartogram.py --style map --region europe --color-by life --ram
 - **Projeções** (`--projection`): `equal-earth` (padrão; equivalente, por isso não exagera os países
   grandes), `robinson`, `winkel-tripel` (a dos mapas-mundo da National Geographic), `mollweide`
   (equivalente), `mercator` e `web-mercator` (mapas online; aumentam muito a Gronelândia, o Canadá
-  e a Rússia). `--central-meridian 150` centra o mapa no Pacífico.
+  e a Rússia), `miller` (um Mercator atenuado, para os polos caberem), `gall-peters` (equivalente,
+  esticada na vertical nos trópicos) e `equirectangular` (plate carrée: longitude e latitude numa
+  grelha simples). `--central-meridian 150` centra o mapa no Pacífico.
 - **Classes** (`--classes N`, 2 a 12, padrão 7): a escala vai do menor ao maior valor dos países
-  mostrados. `--breaks log` (padrão para a população, que vai de umas centenas de pessoas a 1,4 mil
-  milhões) faz passos iguais numa escala logarítmica; `linear` (padrão para os outros valores) passos
-  iguais; `quantile` o mesmo número de países em cada classe.
+  mostrados. `--breaks quantile` (padrão) ordena os países e dá a cada classe o mesmo número deles —
+  com 233 países e 9 classes, 26 em cada — para nenhuma classe ficar vazia; cada limite é o número
+  mais redondo entre o último país de uma classe e o primeiro da seguinte. `jenks` (quebras
+  naturais) põe os limites nos maiores saltos entre valores, juntando países parecidos (numa escala
+  logarítmica para valores positivos). `log` e `linear` fazem passos iguais; com valores tão
+  desiguais como a população, a maioria dos países cai em poucas classes e algumas podem ficar
+  vazias (o registo diz quantas).
 - **Cores** (`--ramp`): `palette` (a escala da própria paleta, padrão), gradientes `blues`,
   `greens`, `reds`, `ylorrd`, `ylgnbu`, as perceptualmente uniformes `viridis`, `magma` e
   `cividis` (legíveis por daltónicos) e as escalas arco-íris `rainbow` (Turbo) e `spectral`.
@@ -177,10 +185,10 @@ o ficheiro poder ser reestilizado ou reutilizado numa página web. Ver
 | `--list-palettes` | Lista as paletas, procura cores parecidas e termina |
 | `--style squares\|outlines\|map` | `squares` (padrão): um quadrado por 500 000 pessoas. `outlines`: contornos dos países com área proporcional à população. `map`: mapa geográfico normal pintado pela população |
 | `--layout 2018\|auto` | Só quadrados. `2018` (padrão): disposição de 2018 atualizada. `auto`: calcula um cartograma novo a partir do mapa geográfico |
-| `--projection NOME` | Só `--style map`: `equal-earth` (padrão), `mercator`, `web-mercator`, `winkel-tripel`, `robinson`, `mollweide` |
+| `--projection NOME` | Só `--style map`: `equal-earth` (padrão), `mercator`, `web-mercator`, `winkel-tripel`, `robinson`, `mollweide`, `miller`, `gall-peters`, `equirectangular` |
 | `--central-meridian GRAUS` | Só `--style map`: longitude ao centro (padrão 0, ou o meio da `--region`) |
 | `--classes N` | Número de classes de cor, 2–12 (padrão 7 em `--style map`, 6 nos outros) |
-| `--breaks log\|linear\|quantile` | Como se cortam as classes (padrão: `log` para a população e `linear` para os outros valores em `--style map`; `quantile` nos cartogramas) |
+| `--breaks quantile\|jenks\|log\|linear` | Como se cortam as classes: o mesmo número de países por classe (`quantile`, padrão), quebras naturais (`jenks`) ou passos iguais (`log`, `linear`) |
 | `--ramp NOME` | Escala de cor: `palette`, `viridis`, `magma`, `cividis`, `blues`, `greens`, `reds`, `ylorrd`, `ylgnbu`, `rainbow`, `spectral`; `_r` inverte-a |
 | `--year AAAA` | População desse ano (1950–2100); depois dos números mais recentes, a projeção da ONU |
 | `--region NOME` | Só um continente: `africa`, `asia`, `europe`, `north-america`, `south-america`, `americas`, `oceania` |
