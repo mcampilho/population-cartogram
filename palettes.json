@@ -1,0 +1,81 @@
+{
+  "_help": [
+    "Colour palettes for population_cartogram.py.",
+    "Every palette has a 'light' and a 'dark' version. Each version has:",
+    "  background: the sea (in light mode drawn as squares with a grid, in dark mode plain)",
+    "  box_text, box_fill: text and background of the title box and the small-countries box",
+    "  countries: 4 to 16 colours for the countries (neighbours get the most different ones)",
+    "Optional, for --color-by: sequential (3+ colours, low to high) and diverging (an odd number",
+    "of colours: decline ... no change ... growth). Without them built-in ramps are used.",
+    "'default' is the palette used when --palette is not given.",
+    "Check a palette with: python3 population_cartogram.py --list-palettes"
+  ],
+  "default": "classic",
+  "palettes": {
+    "classic": {
+      "description": "Vivid colours on light blue (2015 style) / muted colours on slate (2018 style)",
+      "light": {
+        "background": "#c6e9f2", "box_text": "#13232b", "box_fill": "#eef8fb",
+        "countries": ["#e41a1c", "#ff7f00", "#ffd92f", "#1a9641", "#1f4fe0", "#7b3fbf",
+                      "#e7298a", "#8c1c13", "#f4a6c4", "#0d8a8a", "#a65628", "#222222"]
+      },
+      "dark": {
+        "background": "#343f50", "box_text": "#f1f3f6", "box_fill": "#273040",
+        "countries": ["#e5736f", "#f2a541", "#f1d65c", "#4fae6e", "#3f86d4", "#9f6fd0",
+                      "#e95e9f", "#2db6b3", "#b9d36a", "#b97a4c", "#8fa2ef", "#dcdcdc"]
+      }
+    },
+    "pastel": {
+      "description": "Soft pastels on paper / Nord-like tones on blue-grey",
+      "light": {
+        "background": "#f5f1e8", "box_text": "#2d2a26", "box_fill": "#fffdf8",
+        "countries": ["#f28e8e", "#f7b267", "#f4e285", "#9bd18b", "#7fc8c2", "#8fb8e8",
+                      "#b9a3e3", "#f3a6cf", "#b89a7a"]
+      },
+      "dark": {
+        "background": "#2e3440", "box_text": "#eceff4", "box_fill": "#252a33",
+        "countries": ["#bf616a", "#d08770", "#ebcb8b", "#a3be8c", "#88c0d0", "#5e81ac",
+                      "#b48ead", "#8a6f5c", "#d8dee9"]
+      }
+    },
+    "colorblind": {
+      "description": "Okabe-Ito and Paul Tol colours, readable with the common types of colour blindness",
+      "light": {
+        "background": "#e9eef2", "box_text": "#1b1f24", "box_fill": "#f8fafb",
+        "countries": ["#e69f00", "#56b4e9", "#009e73", "#f0e442", "#0072b2", "#d55e00",
+                      "#cc79a7", "#000000", "#882255", "#332288", "#999933", "#aa4499"]
+      },
+      "dark": {
+        "background": "#24282e", "box_text": "#f0f2f5", "box_fill": "#1b1e23",
+        "countries": ["#e69f00", "#56b4e9", "#009e73", "#f0e442", "#0072b2", "#d55e00",
+                      "#cc79a7", "#e8e8e8", "#ee6677", "#aa4499"]
+      }
+    },
+    "neon": {
+      "description": "Saturated colours on white / glowing neon on near-black",
+      "light": {
+        "background": "#f4f4f8", "box_text": "#16161d", "box_fill": "#ffffff",
+        "countries": ["#ff006e", "#fb5607", "#ffbe0b", "#38b000", "#3a86ff", "#8338ec",
+                      "#00bbf9", "#06d6a0", "#c1121f", "#f15bb5", "#2b2d42"]
+      },
+      "dark": {
+        "background": "#0d1117", "box_text": "#e6edf3", "box_fill": "#161b22",
+        "countries": ["#ff2e88", "#ff7a1a", "#ffe14d", "#39e36b", "#3da5ff", "#a259ff",
+                      "#00e5ff", "#ff4d4d", "#d8a7ff", "#ff9ed8", "#f5f5f5"]
+      }
+    },
+    "earth": {
+      "description": "Ochres, olives and teals, like an old atlas",
+      "light": {
+        "background": "#e8e1d0", "box_text": "#2b2418", "box_fill": "#f6f2e8",
+        "countries": ["#8c510a", "#bf812d", "#dfc27d", "#80cdc1", "#35978f", "#01665e",
+                      "#6b8e23", "#556b2f", "#c06c84", "#7f6a93", "#4b3832"]
+      },
+      "dark": {
+        "background": "#2b2620", "box_text": "#efe8da", "box_fill": "#221e19",
+        "countries": ["#c47a3d", "#d9a55b", "#e8d39a", "#8fc7b8", "#3d7f9e", "#3f7f74",
+                      "#9bb556", "#a8452f", "#d08fa5", "#9d8ab8", "#b8a99a"]
+      }
+    }
+  }
+}

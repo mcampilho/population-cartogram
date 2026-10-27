@@ -1,0 +1,234 @@
+iso3,name,continent,population,year,source,squares
+ZWE,Zimbabwe,Africa,16950795,2025,World Bank,34
+ZMB,Zambia,Africa,21913874,2025,World Bank,44
+YEM,Yemen,Asia,41773878,2025,World Bank,84
+VNM,Vietnam,Asia,101598527,2025,World Bank,203
+VEN,Venezuela,South America,28516896,2025,World Bank,57
+VAT,Vatican,Europe,501,2023,UN WPP (Our World in Data),0
+VUT,Vanuatu,Oceania,335169,2025,World Bank,1
+UZB,Uzbekistan,Asia,37053428,2025,World Bank,74
+URY,Uruguay,South America,3384688,2025,World Bank,7
+FSM,Micronesia,Oceania,113683,2025,World Bank,0
+MHL,Marshall Is.,Oceania,36282,2025,World Bank,0
+MNP,N. Mariana Is.,Oceania,43541,2025,World Bank,0
+VIR,U.S. Virgin Is.,North America,103792,2025,World Bank,0
+GUM,Guam,Oceania,168999,2025,World Bank,0
+ASM,American Samoa,Oceania,46029,2025,World Bank,0
+PRI,Puerto Rico,North America,3184835,2025,World Bank,6
+USA,United States,North America,341784857,2025,World Bank,684
+SHN,Saint Helena,Africa,5316,2023,UN WPP (Our World in Data),0
+AIA,Anguilla,North America,14435,2023,UN WPP (Our World in Data),0
+FLK,Falkland Is.,South America,3498,2023,UN WPP (Our World in Data),0
+CYM,Cayman Is.,North America,75844,2025,World Bank,0
+BMU,Bermuda,North America,64555,2025,World Bank,0
+VGB,British Virgin Is.,North America,39732,2025,World Bank,0
+TCA,Turks and Caicos Is.,North America,46855,2025,World Bank,0
+MSR,Montserrat,North America,4440,2023,UN WPP (Our World in Data),0
+CHI,Channel Islands,Europe,168466,2025,World Bank,0
+IMN,Isle of Man,Europe,84118,2025,World Bank,0
+GBR,United Kingdom,Europe,69487000,2025,World Bank,139
+ARE,United Arab Emirates,Asia,11513149,2025,World Bank,23
+UKR,Ukraine,Europe,38980376,2025,World Bank,78
+UGA,Uganda,Africa,51384894,2025,World Bank,103
+TKM,Turkmenistan,Asia,7618847,2025,World Bank,15
+TUR,Turkey,Asia,85878556,2025,World Bank,172
+TUN,Tunisia,Africa,12348573,2025,World Bank,25
+TTO,Trinidad and Tobago,North America,1367764,2025,World Bank,3
+TON,Tonga,Oceania,103742,2025,World Bank,0
+TGO,Togo,Africa,8591626,2025,World Bank,17
+TLS,Timor-Leste,Asia,1418517,2025,World Bank,3
+THA,Thailand,Asia,71619863,2025,World Bank,143
+TZA,Tanzania,Africa,70545865,2025,World Bank,141
+TJK,Tajikistan,Asia,10786734,2025,World Bank,22
+TWN,Taiwan,Asia,23317145,2023,UN WPP (Our World in Data),47
+SYR,Syria,Asia,25620427,2025,World Bank,51
+CHE,Switzerland,Europe,9092436,2025,World Bank,18
+SWE,Sweden,Europe,10596620,2025,World Bank,21
+SWZ,eSwatini,Africa,1256174,2025,World Bank,3
+SUR,Suriname,South America,639850,2025,World Bank,1
+SSD,S. Sudan,Africa,12188788,2025,World Bank,24
+SDN,Sudan,Africa,51662147,2025,World Bank,103
+LKA,Sri Lanka,Asia,21756000,2025,World Bank,44
+ESP,Spain,Europe,49355143,2025,World Bank,99
+KOR,South Korea,Asia,51684564,2025,World Bank,103
+ZAF,South Africa,Africa,64747319,2025,World Bank,129
+SOM,Somalia,Africa,19654739,2025,World Bank,39
+SLB,Solomon Is.,Oceania,838645,2025,World Bank,2
+SVK,Slovakia,Europe,5413813,2025,World Bank,11
+SVN,Slovenia,Europe,2130986,2025,World Bank,4
+SGP,Singapore,Asia,6111175,2025,World Bank,12
+SLE,Sierra Leone,Africa,8819794,2025,World Bank,18
+SYC,Seychelles,Africa,122730,2025,World Bank,0
+SRB,Serbia,Europe,6549143,2025,World Bank,13
+SEN,Senegal,Africa,18931966,2025,World Bank,38
+SAU,Saudi Arabia,Asia,36973555,2025,World Bank,74
+STP,São Tomé and Principe,Africa,240254,2025,World Bank,0
+SMR,San Marino,Europe,34109,2025,World Bank,0
+WSM,Samoa,Oceania,219306,2025,World Bank,0
+VCT,St. Vin. and Gren.,North America,99924,2025,World Bank,0
+LCA,Saint Lucia,North America,180149,2025,World Bank,0
+KNA,St. Kitts and Nevis,North America,46922,2025,World Bank,0
+RWA,Rwanda,Africa,14569341,2025,World Bank,29
+RUS,Russia,Europe,143513328,2025,World Bank,287
+ROU,Romania,Europe,19020271,2025,World Bank,38
+QAT,Qatar,Asia,2972215,2025,World Bank,6
+PRT,Portugal,Europe,10804871,2025,World Bank,22
+POL,Poland,Europe,36435861,2025,World Bank,73
+PHL,Philippines,Asia,116786962,2025,World Bank,234
+PER,Peru,South America,34576665,2025,World Bank,69
+PRY,Paraguay,South America,7013078,2025,World Bank,14
+PNG,Papua New Guinea,Oceania,10762817,2025,World Bank,22
+PAN,Panama,North America,4571189,2025,World Bank,9
+PLW,Palau,Oceania,17663,2025,World Bank,0
+PAK,Pakistan,Asia,255219554,2025,World Bank,510
+OMN,Oman,Asia,5494691,2025,World Bank,11
+NOR,Norway,Europe,5610870,2025,World Bank,11
+PRK,North Korea,Asia,26571036,2025,World Bank,53
+NGA,Nigeria,Africa,237527782,2025,World Bank,475
+NER,Niger,Africa,27917831,2025,World Bank,56
+NIC,Nicaragua,North America,7007502,2025,World Bank,14
+NZL,New Zealand,Oceania,5324700,2025,World Bank,11
+NIU,Niue,Oceania,1841,2023,UN WPP (Our World in Data),0
+COK,Cook Is.,Oceania,14244,2023,UN WPP (Our World in Data),0
+NLD,Netherlands,Europe,18087633,2025,World Bank,36
+ABW,Aruba,North America,108785,2025,World Bank,0
+CUW,Curaçao,North America,156263,2025,World Bank,0
+NPL,Nepal,Asia,29618118,2025,World Bank,59
+NRU,Nauru,Oceania,12025,2025,World Bank,0
+NAM,Namibia,Africa,3092816,2025,World Bank,6
+MOZ,Mozambique,Africa,35631653,2025,World Bank,71
+MAR,Morocco,Africa,38430770,2025,World Bank,77
+ESH,W. Sahara,Africa,579734,2023,UN WPP (Our World in Data),1
+MNE,Montenegro,Europe,623129,2025,World Bank,1
+MNG,Mongolia,Asia,3568978,2025,World Bank,7
+MDA,Moldova,Europe,2360527,2025,World Bank,5
+MCO,Monaco,Europe,38341,2025,World Bank,0
+MEX,Mexico,North America,131946900,2025,World Bank,264
+MUS,Mauritius,Africa,1243741,2025,World Bank,2
+MRT,Mauritania,Africa,5315065,2025,World Bank,11
+MLT,Malta,Europe,579704,2025,World Bank,1
+MLI,Mali,Africa,25198821,2025,World Bank,50
+MDV,Maldives,Asia,529676,2025,World Bank,1
+MYS,Malaysia,Asia,35977838,2025,World Bank,72
+MWI,Malawi,Africa,22216120,2025,World Bank,44
+MDG,Madagascar,Africa,32740678,2025,World Bank,65
+MKD,North Macedonia,Europe,1820909,2025,World Bank,4
+LUX,Luxembourg,Europe,686970,2025,World Bank,1
+LTU,Lithuania,Europe,2888774,2025,World Bank,6
+LIE,Liechtenstein,Europe,41024,2025,World Bank,0
+LBY,Libya,Africa,7458555,2025,World Bank,15
+LBR,Liberia,Africa,5731206,2025,World Bank,11
+LSO,Lesotho,Africa,2363325,2025,World Bank,5
+LBN,Lebanon,Asia,5849421,2025,World Bank,12
+LVA,Latvia,Europe,1847785,2025,World Bank,4
+LAO,Laos,Asia,7873046,2025,World Bank,16
+KGZ,Kyrgyzstan,Asia,7343064,2025,World Bank,15
+KWT,Kuwait,Asia,4865298,2025,World Bank,10
+XKX,Kosovo,Europe,1576876,2025,World Bank,3
+KIR,Kiribati,Oceania,136488,2025,World Bank,0
+KEN,Kenya,Africa,57532493,2025,World Bank,115
+KAZ,Kazakhstan,Asia,20843754,2025,World Bank,42
+JOR,Jordan,Asia,11520684,2025,World Bank,23
+JPN,Japan,Asia,123366734,2025,World Bank,247
+JAM,Jamaica,North America,2837077,2025,World Bank,6
+ITA,Italy,Europe,58915656,2025,World Bank,118
+ISR,Israel,Asia,10122800,2025,World Bank,20
+PSE,Palestine,Asia,5413596,2025,World Bank,11
+IRL,Ireland,Europe,5484367,2025,World Bank,11
+IRQ,Iraq,Asia,47020774,2025,World Bank,94
+IRN,Iran,Asia,92417681,2025,World Bank,185
+IDN,Indonesia,Asia,285721236,2025,World Bank,571
+IND,India,Asia,1463865525,2025,World Bank,2928
+ISL,Iceland,Europe,392404,2025,World Bank,1
+HUN,Hungary,Europe,9514251,2025,World Bank,19
+HND,Honduras,North America,11005850,2025,World Bank,22
+HTI,Haiti,North America,11906095,2025,World Bank,24
+GUY,Guyana,South America,835986,2025,World Bank,2
+GNB,Guinea-Bissau,Africa,2249515,2025,World Bank,4
+GIN,Guinea,Africa,15099727,2025,World Bank,30
+GTM,Guatemala,North America,18687881,2025,World Bank,37
+GRD,Grenada,North America,117303,2025,World Bank,0
+GRC,Greece,Europe,10413962,2025,World Bank,21
+GHA,Ghana,Africa,35064272,2025,World Bank,70
+DEU,Germany,Europe,83491249,2025,World Bank,167
+GEO,Georgia,Asia,3935766,2025,World Bank,8
+GMB,Gambia,Africa,2822093,2025,World Bank,6
+GAB,Gabon,Africa,2593130,2025,World Bank,5
+FRA,France,Europe,66503492,2025,World Bank,133
+SPM,St. Pierre and Miquelon,North America,5707,2023,UN WPP (Our World in Data),0
+WLF,Wallis and Futuna Is.,Oceania,11394,2023,UN WPP (Our World in Data),0
+MAF,St-Martin,North America,24941,2025,World Bank,0
+BLM,St-Barthélemy,North America,11112,2023,UN WPP (Our World in Data),0
+PYF,Fr. Polynesia,Oceania,282465,2025,World Bank,1
+NCL,New Caledonia,Oceania,295333,2025,World Bank,1
+FIN,Finland,Europe,5646436,2025,World Bank,11
+FJI,Fiji,Oceania,933154,2025,World Bank,2
+ETH,Ethiopia,Africa,135472051,2025,World Bank,271
+EST,Estonia,Europe,1366475,2025,World Bank,3
+ERI,Eritrea,Africa,3607003,2025,World Bank,7
+GNQ,Eq. Guinea,Africa,1938431,2025,World Bank,4
+SLV,El Salvador,North America,6365503,2025,World Bank,13
+EGY,Egypt,Africa,118365995,2025,World Bank,237
+ECU,Ecuador,South America,18289896,2025,World Bank,37
+DOM,Dominican Rep.,North America,11520487,2025,World Bank,23
+DMA,Dominica,North America,65871,2025,World Bank,0
+DJI,Djibouti,Africa,1184076,2025,World Bank,2
+GRL,Greenland,North America,56831,2025,World Bank,0
+FRO,Faeroe Is.,Europe,54900,2025,World Bank,0
+DNK,Denmark,Europe,6009169,2025,World Bank,12
+CZE,Czechia,Europe,10886878,2025,World Bank,22
+CYP,Cyprus,Asia,1370754,2025,World Bank,3
+CUB,Cuba,North America,10937203,2025,World Bank,22
+HRV,Croatia,Europe,3876200,2025,World Bank,8
+CIV,Côte d'Ivoire,Africa,32711547,2025,World Bank,65
+CRI,Costa Rica,North America,5152950,2025,World Bank,10
+COD,DR Congo,Africa,112832473,2025,World Bank,226
+COG,Congo,Africa,6484437,2025,World Bank,13
+COM,Comoros,Africa,882847,2025,World Bank,2
+COL,Colombia,South America,53425635,2025,World Bank,107
+CHN,China,Asia,1406585000,2025,World Bank,2813
+MAC,Macao,Asia,685900,2025,World Bank,1
+HKG,Hong Kong,Asia,7498900,2025,World Bank,15
+CHL,Chile,South America,19859921,2025,World Bank,40
+TCD,Chad,Africa,21003705,2025,World Bank,42
+CAF,Central African Rep.,Africa,5513282,2025,World Bank,11
+CPV,Cabo Verde,Africa,527326,2025,World Bank,1
+CAN,Canada,North America,41651653,2025,World Bank,83
+CMR,Cameroon,Africa,29879337,2025,World Bank,60
+KHM,Cambodia,Asia,17847982,2025,World Bank,36
+MMR,Myanmar,Asia,54850648,2025,World Bank,110
+BDI,Burundi,Africa,14390003,2025,World Bank,29
+BFA,Burkina Faso,Africa,24074580,2025,World Bank,48
+BGR,Bulgaria,Europe,6433302,2025,World Bank,13
+BRN,Brunei,Asia,466330,2025,World Bank,1
+BRA,Brazil,South America,212812405,2025,World Bank,426
+BWA,Botswana,Africa,2562122,2025,World Bank,5
+BIH,Bosnia and Herz.,Europe,3140095,2025,World Bank,6
+BOL,Bolivia,South America,12581843,2025,World Bank,25
+BTN,Bhutan,Asia,796682,2025,World Bank,2
+BEN,Benin,Africa,14814460,2025,World Bank,30
+BLZ,Belize,North America,422924,2025,World Bank,1
+BEL,Belgium,Europe,11941781,2025,World Bank,24
+BLR,Belarus,Europe,9085991,2025,World Bank,18
+BRB,Barbados,North America,282623,2025,World Bank,1
+BGD,Bangladesh,Asia,175686899,2025,World Bank,351
+BHR,Bahrain,Asia,1600366,2025,World Bank,3
+BHS,Bahamas,North America,403033,2025,World Bank,1
+AZE,Azerbaijan,Asia,10246996,2025,World Bank,20
+AUT,Austria,Europe,9208163,2025,World Bank,18
+AUS,Australia,Oceania,27614411,2025,World Bank,55
+ARM,Armenia,Asia,3086700,2025,World Bank,6
+ARG,Argentina,South America,45851378,2025,World Bank,92
+ATG,Antigua and Barb.,North America,94209,2025,World Bank,0
+AGO,Angola,Africa,39040039,2025,World Bank,78
+AND,Andorra,Europe,82904,2025,World Bank,0
+DZA,Algeria,Africa,47435312,2025,World Bank,95
+ALB,Albania,Europe,2349580,2025,World Bank,5
+AFG,Afghanistan,Asia,43844111,2025,World Bank,88
+SXM,Sint Maarten,North America,43923,2025,World Bank,0
+TUV,Tuvalu,Oceania,9492,2025,World Bank,0
+REU,Réunion,Africa,874883,2023,UN WPP (Our World in Data),2
+GLP,Guadeloupe,North America,376518,2023,UN WPP (Our World in Data),1
+MTQ,Martinique,North America,346008,2023,UN WPP (Our World in Data),1
+GUF,French Guiana,South America,303408,2023,UN WPP (Our World in Data),1
+MYT,Mayotte,Africa,316028,2023,UN WPP (Our World in Data),1

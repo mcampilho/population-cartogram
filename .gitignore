@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# maps generated while trying things out (the published examples are in examples/)
+/tests/
+/population_cartogram_*.png
+/mapa_*.png
+/dados.csv
+
+# local scratch and assistant notes
+/run_tests.cmd
+/WPC_example.py
+/CLAUDE.md
