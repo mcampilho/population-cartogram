@@ -53,6 +53,7 @@ Requires Python 3.9+ and:
 
 ```bash
 pip install numpy scipy pillow
+pip install reportlab          # optional: vector PDF output
 ```
 
 ```bash
@@ -199,6 +200,15 @@ at 100% and read clearly at 400–800%. Only countries too small to hold any tex
 Caribbean islands) get a small label beside them. On the world map every country is named. See
 [world_2025_map.svg](examples/world_2025_map.svg).
 
+### PDF
+
+With `-o map.pdf` the same drawing is written as a vector PDF, ready to print or to place in a
+document: labels as real text in the embedded font (searchable and selectable), and on
+`--style map` the same zoomable labels as the SVG. A PDF is always drawn in the light theme,
+since it is meant for paper; `--theme dark` or `both` are ignored. It needs `reportlab`; without
+it the PDF holds a picture of the PNG. One pixel of the map is 0.75 pt, so a world map comes out
+as a large page — print it with "fit to page".
+
 ### Options
 
 | Option | What it does |
@@ -218,7 +228,7 @@ Caribbean islands) get a small label beside them. On the world map every country
 | `--region NAME` | Only one continent: `africa`, `asia`, `europe`, `north-america`, `south-america`, `americas`, `oceania` |
 | `--color-by WHAT` | Thematic map: `population`, `continent`, `growth[:YEAR]`, `gdp`, `life`, `fertility`, `urban`, `density`, `wb:CODE`, `csv:FILE` |
 | `--lang en\|pt\|es` | Language of the texts and country names (default: system language) |
-| `-o FILE` | Output file, `.png`, `.svg` or `.pdf` |
+| `-o FILE` | Output file, `.png`, `.svg` or `.pdf` (light theme only) |
 | `--per-cell N` | People per square (default 500,000; other values need `--layout auto`) |
 | `--cell-px N` | Size of a square in pixels (default 10; chosen automatically for `--region`) |
 | `--source auto\|worldbank\|owid` | Population source (default: World Bank, with Our World in Data for the rest) |

@@ -53,6 +53,7 @@ Examples:
     python population_cartogram.py --theme both -o mapa.png   # mapa_light.png and mapa_dark.png
     python population_cartogram.py --year 2050             # UN projection
     python population_cartogram.py --region africa --color-by life -o africa.svg
+    python population_cartogram.py --style map -o world.pdf  # vector PDF (pip install reportlab)
     python population_cartogram.py --per-cell 1000000 --cell-px 14
     python population_cartogram.py --data my_pop.csv       # iso3,population[,year] overrides
 """
@@ -2086,6 +2087,19 @@ def block_size(lines):
 # ---------------------------------------------------------------------------
 # Output back-ends: the same drawing calls produce a PNG/PDF or an SVG
 # ---------------------------------------------------------------------------
+def vector_output(path):
+    """True for an SVG, and for a PDF when reportlab can draw it as vectors."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext != ".pdf":
+        return ext == ".svg"
+    try:
+        import reportlab  # noqa: F401
+        return True
+    except ImportError:
+        log("  reportlab is not installed: the PDF holds a picture (pip install reportlab for vectors)")
+        return False
+
+
 def edge_width(cs):
     """Width of the country outlines (--style outlines), in output pixels."""
     return min(cs, 16) / 10
@@ -2232,6 +2246,149 @@ class SvgDrawer:
     def save(self, path):
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(self.parts + ["</svg>"]))
+        return self.w, self.h
+
+
+class PdfDrawer:
+    """Vector PDF (needs reportlab): the same drawing as SvgDrawer, with the labels in
+    the very font they were measured with, embedded. Coordinates stay in pixels,
+    top-down; one pixel is 0.75 pt, as when a browser prints an SVG."""
+    PT = 0.75
+
+    def __init__(self, G, cs, fills, gaps, sea, grid, shapes=None, edge=None, globe=None):
+        from reportlab.pdfgen import canvas
+        H, W = G.shape
+        self.w, self.h = W * cs, H * cs
+        self.c = c = canvas.Canvas("", pagesize=(self.w * self.PT, self.h * self.PT), pageCompression=1)
+        c.transform(self.PT, 0, 0, -self.PT, 0, self.h * self.PT)
+        self.fonts = {}
+        gap = max(1, cs // 9)
+        s = cs - gap
+        if shapes is not None:
+            lw = edge_width(cs)
+            c.setLineJoin(1)
+            self.box(0, 0, self.w, self.h, globe["page"] if globe else fills[0])
+            if globe:
+                self.fill(self.path([globe["sphere"]]), fills[0])
+                self.stroke(self.path(globe["graticule"], close=False), globe["graticule_colour"], lw)
+            for i, polys in shapes:
+                p = self.path([ring for poly in polys for ring in poly])
+                self.fill(p, fills[i])
+                self.stroke(p, edge, lw)
+            if globe:
+                self.stroke(self.path([globe["sphere"]]), globe["rim"], 2 * lw)
+            return
+        if grid:                                        # the sea: a square in every cell, on the grid colour
+            self.box(0, 0, self.w, self.h, grid)
+            p = c.beginPath()
+            for y in range(H):
+                for x in range(W):
+                    p.rect(x * cs, y * cs, s, s)
+            self.fill(p, sea)
+        else:
+            self.box(0, 0, self.w, self.h, fills[0])
+        for i in np.unique(G[G > 0]).tolist():
+            ys, xs = np.nonzero(G == i)
+            cells = list(zip(xs.tolist(), ys.tolist()))
+            if gaps[i] != fills[0] and gaps[i] != gaps[0]:
+                p = c.beginPath()
+                for x, y in cells:
+                    p.rect(x * cs, y * cs, cs, cs)
+                self.fill(p, gaps[i])
+            p = c.beginPath()
+            for x, y in cells:
+                p.rect(x * cs, y * cs, s, s)
+            self.fill(p, fills[i])
+
+    def path(self, rings, close=True):
+        p = self.c.beginPath()
+        for ring in rings:
+            pts = np.round(ring, 2).tolist()
+            if len(pts) < 2:
+                continue
+            p.moveTo(*pts[0])
+            for x, y in pts[1:]:
+                p.lineTo(x, y)
+            if close:
+                p.close()
+        return p
+
+    def fill(self, p, colour):
+        self.c.setFillColor(colour)
+        self.c.drawPath(p, stroke=0, fill=1, fillMode=1)       # even-odd: holes stay open
+
+    def stroke(self, p, colour, width):
+        self.c.setStrokeColor(colour)
+        self.c.setLineWidth(width)
+        self.c.drawPath(p, stroke=1, fill=0)
+
+    def box(self, x, y, w, h, colour):
+        self.c.setFillColor(colour)
+        self.c.rect(x, y, w, h, stroke=0, fill=1)
+
+    def rect(self, box, fill, outline=None, width=0):
+        x0, y0, x1, y1 = box
+        self.c.setFillColor(fill)
+        if outline:
+            self.c.setStrokeColor(outline)
+            self.c.setLineWidth(width)
+        self.c.rect(x0, y0, x1 - x0, y1 - y0, stroke=1 if outline else 0, fill=1)
+
+    def lines(self, segs, colour, width):
+        if segs:
+            self.c.setLineCap(2)
+            self.stroke(self.path([[(x0, y0), (x1, y1)] for x0, y0, x1, y1 in segs], close=False),
+                        colour, width)
+            self.c.setLineCap(0)
+
+    def face(self, bold):
+        if bold not in self.fonts:
+            self.fonts[bold] = "Helvetica-Bold" if bold else "Helvetica"
+            font(12, bold)                              # finds the font file
+            if _FONT_PATHS.get(bold):
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+                name = "LabelBold" if bold else "Label"
+                try:
+                    pdfmetrics.registerFont(TTFont(name, _FONT_PATHS[bold]))
+                    self.fonts[bold] = name
+                except Exception as e:
+                    log(f"  warning: {os.path.basename(_FONT_PATHS[bold])} cannot be embedded ({e}), "
+                        "using Helvetica")
+        return self.fonts[bold]
+
+    def text(self, xy, s, size, bold, fill, anchor="la", halo=None, halo_w=0):
+        x, y = xy
+        # PIL anchors at the ascender, PDF at the baseline
+        y += (font(64, bold).getmetrics()[0] * size / 64 if size < 8 else font(size, bold).getmetrics()[0])
+        c = self.c
+        c.saveState()
+        c.translate(x, y)
+        c.scale(1, -1)
+        x0 = -c.stringWidth(s, self.face(bold), size) / 2 if anchor[0] == "m" else 0
+        # one text object per pass, each in its own graphics state: reportlab switches
+        # font subsets inside a string (e.g. at "ã") and would start a second pass in
+        # the wrong one, and the halo's stroke-only mode would outlive it
+        for mode in ((1, 0) if halo else (0,)):        # the halo under the text, as paint-order="stroke"
+            c.saveState()
+            t = c.beginText(x0, 0)
+            t.setFont(self.face(bold), size)
+            t.setTextRenderMode(mode)
+            if mode:
+                c.setStrokeColor(halo)
+                c.setLineWidth(2 * halo_w)
+                c.setLineJoin(1)
+            else:
+                c.setFillColor(fill)
+            t.textOut(s)
+            c.drawText(t)
+            c.restoreState()
+        c.restoreState()
+
+    def save(self, path):
+        self.c.showPage()
+        with open(path, "wb") as f:
+            f.write(self.c.getpdfdata())
         return self.w, self.h
 
 
@@ -2405,10 +2562,13 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                  "sphere": (layout["sphere"] + [off_c, off_r]) * cs,
                  "graticule": [(g + [off_c, off_r]) * cs for g in layout["graticule"]]}
         edge = mix(th["border"], th["bg"], 0.45)
+    vector = vector_output(out_path)
     if out_path.lower().endswith(".svg"):
         names = {i: (units[i - 1]["code"], f"{units[i - 1]['name']} – {fmt_pop(pops[i], tx)}")
                  for i in range(1, n + 1)}
         dr = SvgDrawer(G, cs, fills, gaps, sea, th["grid"], names, px_shapes, edge, globe)
+    elif vector:
+        dr = PdfDrawer(G, cs, fills, gaps, sea, th["grid"], px_shapes, edge, globe)
     else:
         dr = RasterDrawer(G, cs, fills, gaps, px_shapes, edge, globe)
     if thematic and shapes is None:
@@ -2427,10 +2587,10 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             readable[ink] = np.array(
                 [min(contrast_ratio(ink, sea), contrast_ratio(ink, th["page"])) >= MIN_CONTRAST]
                 + [contrast_ratio(ink, colour_of[i]) >= MIN_CONTRAST for i in range(1, n + 1)])
-    # An SVG map can be zoomed: labels are fitted on a grid of 2 px instead of a
-    # cell, whole inside their country, and shrink down to SVG_MIN_FONT.
+    # An SVG or PDF map can be zoomed: labels are fitted on a grid of 2 px instead
+    # of a cell, whole inside their country, and shrink down to SVG_MIN_FONT.
     fine = None
-    if geo and out_path.lower().endswith(".svg"):
+    if geo and vector:
         k = max(cs // 2, 1)
         img = Image.new("I", (G.shape[1] * k, G.shape[0] * k), 0)
         draw = ImageDraw.Draw(img)
@@ -2969,7 +3129,8 @@ def main(argv=None):
                     help="colour countries by a value: continent, growth[:BASEYEAR], "
                          f"{', '.join(INDICATORS)}, wb:INDICATOR (World Bank code) or csv:FILE (iso3,value)")
     ap.add_argument("--lang", choices=LANGS, default=None, help="language (default: system language)")
-    ap.add_argument("-o", "--output", help="PNG, SVG or PDF file (default: population_cartogram_<theme>.png)")
+    ap.add_argument("-o", "--output", help="PNG, SVG or PDF file (default: population_cartogram_<theme>.png); "
+                                           "a PDF is vector with reportlab installed, light theme only")
     ap.add_argument("--per-cell", type=float, default=500_000, help="people per square (default: %(default)d)")
     ap.add_argument("--cell-px", type=int, help="size of a square in pixels (default: 10; larger for --region)")
     ap.add_argument("--source", choices=["auto", "worldbank", "owid"], default="auto",
@@ -3138,6 +3299,9 @@ def main(argv=None):
     else:
         cs = a.cell_px or (int(np.clip(round(3200 / layout["G"].shape[1]), 10, 40)) if region else 10)
 
+    if a.output and a.output.lower().endswith(".pdf") and a.theme != "light":
+        log("a PDF is meant for printing: drawing the light theme only")
+        a.theme = "light"
     modes = ["light", "dark"] if a.theme == "both" else [a.theme]
     for mode in modes:
         for w in palette_warnings(pal_name, mode, pals[pal_name][mode]):

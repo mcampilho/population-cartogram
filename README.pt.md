@@ -54,6 +54,7 @@ Precisa de Python 3.9+ e de:
 
 ```bash
 pip install numpy scipy pillow
+pip install reportlab          # opcional: PDF vetorial
 ```
 
 ```bash
@@ -200,6 +201,15 @@ cinzentas a 100% e leem-se bem a 400–800%. Só os países pequenos demais para
 Mónaco, ilhas das Caraíbas) têm um rótulo pequeno ao lado. No mapa-mundo todos os países ficam com
 nome. Ver [world_2025_map.svg](examples/world_2025_map.svg).
 
+### PDF
+
+Com `-o mapa.pdf` o mesmo desenho é escrito num PDF vetorial, pronto a imprimir ou a pôr num
+documento: os rótulos são texto verdadeiro na fonte embutida (pesquisável e selecionável) e, em
+`--style map`, têm os mesmos rótulos para ampliar do SVG. O PDF é sempre desenhado no tema claro,
+porque se destina ao papel; `--theme dark` ou `both` são ignorados. Precisa do `reportlab`; sem ele,
+o PDF leva uma imagem do PNG. Um píxel do mapa vale 0,75 pt, por isso um mapa-mundo dá uma página
+grande — imprime com "ajustar à página".
+
 ### Opções
 
 | Opção | O que faz |
@@ -219,7 +229,7 @@ nome. Ver [world_2025_map.svg](examples/world_2025_map.svg).
 | `--region NOME` | Só um continente: `africa`, `asia`, `europe`, `north-america`, `south-america`, `americas`, `oceania` |
 | `--color-by O_QUÊ` | Mapa temático: `population`, `continent`, `growth[:ANO]`, `gdp`, `life`, `fertility`, `urban`, `density`, `wb:CÓDIGO`, `csv:FICHEIRO` |
 | `--lang en\|pt\|es` | Idioma dos textos e dos nomes dos países (padrão: o do sistema) |
-| `-o FICHEIRO` | Ficheiro de saída, `.png`, `.svg` ou `.pdf` |
+| `-o FICHEIRO` | Ficheiro de saída, `.png`, `.svg` ou `.pdf` (só tema claro) |
 | `--per-cell N` | Pessoas por quadrado (padrão 500 000; outros valores só com `--layout auto`) |
 | `--cell-px N` | Tamanho de cada quadrado em píxeis (padrão 10; automático com `--region`) |
 | `--source auto\|worldbank\|owid` | Fonte da população (padrão: Banco Mundial, com a Our World in Data para o resto) |
