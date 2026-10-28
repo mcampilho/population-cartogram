@@ -1411,6 +1411,7 @@ ROBINSON_PDFE = CubicSpline(np.arange(0, 91, 5), [
 MAP_SOUTH = -58.0                      # like the cartograms, without Antarctica
 MAP_CELLS = 24000                      # grid cells of a map: ~3700 x 1600 px with 16 px cells
 MAP_CELL_PX = 16
+MIN_CONTRAST = 4.0                     # labels on a map: WCAG contrast with every colour under the text
 # --region on --style map: central meridian, then the west, east, south and north limits
 REGION_VIEW = {"africa": (17, -20, 55, -36, 38), "asia": (90, 25, 150, -12, 56),
                "europe": (15, -25, 50, 34, 72), "north-america": (-100, -170, -50, 6, 84),
@@ -2406,6 +2407,14 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     world = info["world"]
     order = sorted((i for i in range(1, n + 1) if shown(i)), key=lambda k: -pops[k])
     external = []
+    # A geographic map draws text without a halo, so a label may only lie on
+    # colours it contrasts with: readable[ink][id], id 0 being the sea and the page.
+    readable = {}
+    if geo:
+        for ink in ("#141414", "#ffffff", th["label"]):
+            readable[ink] = np.array(
+                [min(contrast_ratio(ink, sea), contrast_ratio(ink, th["page"])) >= MIN_CONTRAST]
+                + [contrast_ratio(ink, colour_of[i]) >= MIN_CONTRAST for i in range(1, n + 1)])
     for i in order:
         if T[i] == 0:
             continue
@@ -2415,6 +2424,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         name = units[i - 1]["name"]
         value = value_text(i)
         tcol = "#141414" if luminance(hex_rgb(colour_of[i])) > 0.5 else "#ffffff"
+        inks = sorted(("#141414", "#ffffff"), key=lambda c: -contrast_ratio(c, colour_of[i]))
         dmap = distance_transform_edt(np.pad(mine, 1))[1:-1, 1:-1]
         ys, xs = np.nonzero(mine)
         dv = dmap[ys, xs]
@@ -2436,10 +2446,25 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                 part = mine[r0:r1, c0:c1]
                 if part.mean() < (0.6 if geo else 0.9) or canvas.occ[r0:r1, c0:c1].any():
                     continue
+                if geo:                         # it may cross the border: an ink that reads on all it covers
+                    # (its own colour takes the better of black and white, as on the cartograms);
+                    # the cells mostly under each line of text, not the whole box
+                    under, y = [], box[1]
+                    for s, size, bold in lines:
+                        w, h = text_size(font(size, bold), s)
+                        a, b = int(round(y / cs)), int(round((y + h) / cs))
+                        c, d = int(round((px - w / 2) / cs)), int(round((px + w / 2) / cs))
+                        under.append(G[a:max(b, a + 1), c:max(d, c + 1)].ravel())
+                        y += h * 1.08
+                    under = np.unique(np.concatenate(under))
+                    others = under[under != i]
+                    tcol = next((c for j, c in enumerate(inks)
+                                 if readable[c][others].all() and (j == 0 or readable[c][i])), None)
+                    if tcol is None:
+                        continue
                 y = box[1]
-                for s, size, bold in lines:     # on a map the text may cross a border: a halo of its own colour
-                    dr.text((px, y), s, size, bold, tcol, anchor="ma",
-                            **({"halo": colour_of[i], "halo_w": max(1, cs // 8)} if geo else {}))
+                for s, size, bold in lines:
+                    dr.text((px, y), s, size, bold, tcol, anchor="ma")
                     y += text_size(font(size, bold), s)[1] * 1.08
                 canvas.occ[r0:r1, c0:c1] = True
                 placed = True
@@ -2452,20 +2477,19 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
 
     # --- labels outside, with a leader line. They may sit over other countries
     # (with a halo) when that keeps them much closer than the nearest open sea.
-    # A geographic map has no room to spare: the biggest countries first, and a
-    # label that would cover another is left out rather than overlap.
+    # A geographic map has no room to spare: the biggest countries first, without
+    # a halo, only on colours the text reads on, and a label that would cover
+    # another is left out rather than overlap.
     efs = max(cs * 0.7, 8) if geo else max(cs * 0.95, 8)
-    f = font(efs)
     land = G > 0
     halo = th["ocean"] or th["bg"]
     dirs = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36 if geo else 24, endpoint=False)]
     leaders, ext_texts = [], []
     wired = np.zeros_like(canvas.occ)
+    ext_ok = readable[th["label"]][G] if geo else None
     unlabelled = []
     for i in external:
         s = f"{units[i - 1]['name']} {value_text(i)}"
-        bw, bh = text_size(f, s)
-        bw, bh = bw + 4, bh + 2
         ys, xs = np.nonzero(main_part(G == i))
         ay, ax = (ys.mean() + 0.5) * cs, (xs.mean() + 0.5) * cs
 
@@ -2480,25 +2504,33 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                      np.clip((txc + (ex - txc) * t) // cs, 0, G.shape[1] - 1).astype(int))
             return cells, (ex, ey, txc, tyc)
 
-        best = None
-        for r in range(1, 20 if geo else 50):
-            if best is not None and best[0] < r:
+        for size in ((efs, max(cs * 0.55, 8)) if geo else (efs,)):     # a map tries smaller text too
+            bw, bh = text_size(font(size), s)
+            bw, bh = bw + 4, bh + 2
+            best = None
+            for r in range(1, 20 if geo else 50):
+                if best is not None and best[0] < r:
+                    break
+                for dx, dy in dirs:
+                    px, py = ax + dx * r * cs * 0.8, ay + dy * r * cs * 0.8
+                    x0 = px if dx > 0.3 else (px - bw if dx < -0.3 else px - bw / 2)
+                    y0 = py - bh / 2
+                    box = (x0, y0, x0 + bw, y0 + bh)
+                    if not canvas.inside(*box):
+                        continue
+                    r0, r1, c0, c1 = canvas.cells(*box)
+                    score = 1000 * canvas.occ[r0:r1, c0:c1].sum() + 0.6 * land[r0:r1, c0:c1].sum() + r
+                    if geo:                # only on colours the text reads on; no crossing other labels
+                        a, c = int(round(y0 / cs)), int(round(x0 / cs))
+                        score += 1000 * (~ext_ok[a:max(int(round((y0 + bh) / cs)), a + 1),
+                                                 c:max(int(round((x0 + bw) / cs)), c + 1)]).sum()
+                        (ly, lx), _ = leader_cells(box)
+                        score += (1000 * (canvas.occ[ly, lx].sum() + wired[r0:r1, c0:c1].sum())
+                                  + 60 * wired[ly, lx].sum())
+                    if best is None or score < best[0]:
+                        best = (score, box)
+            if best is not None and best[0] < 1000:
                 break
-            for dx, dy in dirs:
-                px, py = ax + dx * r * cs * 0.8, ay + dy * r * cs * 0.8
-                x0 = px if dx > 0.3 else (px - bw if dx < -0.3 else px - bw / 2)
-                y0 = py - bh / 2
-                box = (x0, y0, x0 + bw, y0 + bh)
-                if not canvas.inside(*box):
-                    continue
-                r0, r1, c0, c1 = canvas.cells(*box)
-                score = 1000 * canvas.occ[r0:r1, c0:c1].sum() + 0.6 * land[r0:r1, c0:c1].sum() + r
-                if geo:                    # nor cross other labels and leader lines
-                    (ly, lx), _ = leader_cells(box)
-                    score += (1000 * (canvas.occ[ly, lx].sum() + wired[r0:r1, c0:c1].sum())
-                              + 60 * wired[ly, lx].sum())
-                if best is None or score < best[0]:
-                    best = (score, box)
         if best is None or (geo and best[0] >= 1000):
             unlabelled.append(units[i - 1]["name"])
             continue
@@ -2509,12 +2541,12 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         if math.hypot(ex - txc, ey - tyc) > cs * 0.9:
             leaders.append((ex, ey, txc, tyc))
             wired[cells] = True
-        ext_texts.append(((box[0] + 2, box[1] + 1), s))
+        ext_texts.append(((box[0] + 2, box[1] + 1), s, size))
     if unlabelled:
         log(f"  no room for {len(unlabelled)} label(s): {', '.join(unlabelled)}")
     dr.lines(leaders, th["lead"], max(1, cs // 10))
-    for xy, s in ext_texts:
-        dr.text(xy, s, efs, False, th["label"], anchor="la", halo=halo, halo_w=max(1, cs // 7))
+    for xy, s, size in ext_texts:
+        dr.text(xy, s, size, False, th["label"], anchor="la", halo=None if geo else halo, halo_w=max(1, cs // 7))
 
     # --- boxes
     def frame_box(b):

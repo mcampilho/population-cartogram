@@ -250,7 +250,9 @@ cores dos vizinhos, para que vizinhos nunca tenham a mesma cor nem tons quase ig
 
 - Formas e posições são aproximadas: é um cartograma, não um mapa (exceto com `--style map`).
 - Em `--style map` os países muito pequenos (Singapura, Malta, ilhas do Pacífico) mal se veem. Os
-  nomes que não cabem dentro do país ficam ao lado, com uma linha de chamada; no mapa-mundo, uns 35
+  rótulos não têm contorno: o texto só fica onde contrasta com todas as cores por baixo dele (preto
+  ou branco dentro do país, a cor de texto do tema fora dele). Os nomes que não cabem dentro do país
+  ficam ao lado, com uma linha de chamada; no mapa-mundo, uns 35
   países pequenos dos sítios mais apertados (Balcãs, Caraíbas, Grandes Lagos africanos) ficam sem
   nome para as etiquetas não se sobreporem (o registo diz quais) — `--region` mostra-os todos. A
   Antártida fica de fora.

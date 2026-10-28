@@ -250,7 +250,9 @@ difference) from its neighbours' colours, so neighbours never share a colour or 
 
 - Shapes and positions are approximate: this is a cartogram, not a map (except `--style map`).
 - On `--style map` very small countries (Singapore, Malta, Pacific islands) are barely visible.
-  Names that do not fit inside a country go beside it with a leader line; on the world map about
+  Labels have no outline or halo: text only goes where it contrasts with every colour under it
+  (black or white inside a country, the theme's text colour outside). Names that do not fit
+  inside a country go beside it with a leader line; on the world map about
   35 small countries in the most crowded places (Balkans, Caribbean, African Great Lakes) stay
   unnamed so that labels never overlap (the log lists them) — `--region` shows them all.
   Antarctica is left out.
