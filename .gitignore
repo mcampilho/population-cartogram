@@ -9,5 +9,7 @@ __pycache__/
 
 # local scratch and assistant notes
 /run_tests.cmd
+/run_tests.py
+/mapgen.cmd
 /WPC_example.py
 /CLAUDE.md
