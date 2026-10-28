@@ -130,6 +130,25 @@ python population_cartogram.py --style map --region europe --color-by life --ram
 
 `--classes`, `--breaks` e `--ramp` também funcionam nos cartogramas com `--color-by`.
 
+#### Que projeção e que classes escolher?
+
+Nenhum mapa plano do globo conserva ao mesmo tempo as áreas e as formas; cada projeção sacrifica alguma coisa.
+
+| Projeção | Conserva | Sacrifica | Boa para |
+|---|---|---|---|
+| `equal-earth` | áreas | alguma forma perto dos polos | **mapas temáticos do mundo** (a melhor escolha) |
+| `mollweide` | áreas | formas achatadas para as margens | mapas temáticos, como alternativa |
+| `robinson`, `winkel-tripel` | nenhuma exatamente, um equilíbrio das duas | pequenos erros em todo o lado | mapas-mundo gerais com aspeto natural |
+| `mercator`, `web-mercator` | formas e ângulos locais | áreas: a Gronelândia parece do tamanho de África | combinar com mapas online; navegação |
+| `miller` | quase as formas | áreas, embora menos que o Mercator | quando os polos do Mercator são demais |
+| `gall-peters` | áreas | formas: trópicos esticados na vertical, latitudes altas achatadas | mostrar como é um retângulo equivalente |
+| `equirectangular` | distâncias norte–sul | a largura, cada vez mais com a latitude | dados numa grelha de latitude/longitude |
+
+Num mapa pintado por país, o olho julga pela área pintada, por isso uma projeção equivalente
+(`equal-earth`, `mollweide`) dá a imagem mais justa. Nas classes, `quantile` (padrão) usa todas as
+cores por igual e é a mais segura; `jenks` é melhor quando os valores formam grupos claros.
+`log` e `linear` servem para valores já bem distribuídos, como percentagens.
+
 ### Anos passados e futuros
 
 `--year` desenha qualquer ano entre 1950 e 2100. Até aos números mais recentes do Banco Mundial

@@ -129,6 +129,25 @@ python population_cartogram.py --style map --region europe --color-by life --ram
 
 `--classes`, `--breaks` and `--ramp` also work on the cartograms with `--color-by`.
 
+#### Which projection and classes to choose?
+
+No flat map of the globe keeps both areas and shapes; each projection gives up something.
+
+| Projection | Keeps | Gives up | Good for |
+|---|---|---|---|
+| `equal-earth` | areas | some shape near the poles | **thematic world maps** (the best choice) |
+| `mollweide` | areas | shapes squashed towards the edges | thematic maps, as an alternative |
+| `robinson`, `winkel-tripel` | neither exactly, a balance of both | small errors everywhere | general world maps that look natural |
+| `mercator`, `web-mercator` | local shapes and angles | areas: Greenland looks as big as Africa | matching online maps; navigation |
+| `miller` | almost the shapes | areas, though less than Mercator | when Mercator's poles are too much |
+| `gall-peters` | areas | shapes: tropics stretched up, high latitudes flattened | showing what an equal-area rectangle looks like |
+| `equirectangular` | north–south distances | width, more and more with latitude | data on a latitude/longitude grid |
+
+On a map coloured by country the eye judges by the painted area, so an equal-area projection
+(`equal-earth`, `mollweide`) gives the fairest picture. For the classes, `quantile` (default)
+uses every colour evenly and is the safest; `jenks` is better when the values form clear groups.
+`log` and `linear` suit values that are already evenly spread, such as percentages.
+
 ### Past and future years
 
 `--year` draws any year from 1950 to 2100. Years up to the latest World Bank figures use the
