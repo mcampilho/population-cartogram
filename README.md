@@ -174,6 +174,12 @@ edited. Every country is a group with its ISO code as `id` and its name and popu
 tooltip, so the file can be restyled or reused on a web page. See
 [world_2025_classic_dark.svg](examples/world_2025_classic_dark.svg).
 
+On `--style map` an SVG is labelled for zooming in: every name is fitted whole inside its
+country, as big as it fits, down to 1.5 px — Luxembourg or Montenegro look like small grey marks
+at 100% and read clearly at 400–800%. Only countries too small to hold any text (Vatican, Monaco,
+Caribbean islands) get a small label beside them. On the world map every country is named. See
+[world_2025_map.svg](examples/world_2025_map.svg).
+
 ### Options
 
 | Option | What it does |
@@ -254,7 +260,8 @@ difference) from its neighbours' colours, so neighbours never share a colour or 
   (black or white inside a country, the theme's text colour outside). Names that do not fit
   inside a country go beside it with a leader line; on the world map about
   35 small countries in the most crowded places (Balkans, Caribbean, African Great Lakes) stay
-  unnamed so that labels never overlap (the log lists them) — `--region` shows them all.
+  unnamed so that labels never overlap (the log lists them) — `--region` or SVG output shows
+  them all.
   Antarctica is left out.
 - In the 2018 layout, the areas that grew most (West Africa, southern India) visibly bulge, and
   the further a year is from 2018 the more the shapes drift: by 2050 Africa is much rounder,

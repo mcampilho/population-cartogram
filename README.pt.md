@@ -175,6 +175,12 @@ ser editado. Cada país é um grupo com o código ISO como `id` e o nome e a pop
 o ficheiro poder ser reestilizado ou reutilizado numa página web. Ver
 [world_2025_classic_dark.svg](examples/world_2025_classic_dark.svg).
 
+Em `--style map`, o SVG tem rótulos feitos para ampliar: cada nome é encaixado inteiro dentro do
+seu país, tão grande quanto cabe, até 1,5 px — o Luxemburgo ou o Montenegro parecem pequenas marcas
+cinzentas a 100% e leem-se bem a 400–800%. Só os países pequenos demais para conter texto (Vaticano,
+Mónaco, ilhas das Caraíbas) têm um rótulo pequeno ao lado. No mapa-mundo todos os países ficam com
+nome. Ver [world_2025_map.svg](examples/world_2025_map.svg).
+
 ### Opções
 
 | Opção | O que faz |
@@ -254,7 +260,8 @@ cores dos vizinhos, para que vizinhos nunca tenham a mesma cor nem tons quase ig
   ou branco dentro do país, a cor de texto do tema fora dele). Os nomes que não cabem dentro do país
   ficam ao lado, com uma linha de chamada; no mapa-mundo, uns 35
   países pequenos dos sítios mais apertados (Balcãs, Caraíbas, Grandes Lagos africanos) ficam sem
-  nome para as etiquetas não se sobreporem (o registo diz quais) — `--region` mostra-os todos. A
+  nome para as etiquetas não se sobreporem (o registo diz quais) — `--region` ou a saída SVG
+  mostram-nos todos. A
   Antártida fica de fora.
 - Na disposição de 2018, as zonas que mais cresceram (África Ocidental, sul da Índia) ficam
   visivelmente mais salientes, e quanto mais longe de 2018 mais as formas se afastam do original:

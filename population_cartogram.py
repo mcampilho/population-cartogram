@@ -76,7 +76,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy.fft import dctn, idctn
 from scipy.interpolate import CubicSpline
-from scipy.ndimage import distance_transform_edt, gaussian_filter, map_coordinates
+from scipy.ndimage import distance_transform_edt, find_objects, gaussian_filter, map_coordinates
 from scipy.ndimage import label as cc_label
 from scipy.spatial import cKDTree
 
@@ -1411,7 +1411,8 @@ ROBINSON_PDFE = CubicSpline(np.arange(0, 91, 5), [
 MAP_SOUTH = -58.0                      # like the cartograms, without Antarctica
 MAP_CELLS = 24000                      # grid cells of a map: ~3700 x 1600 px with 16 px cells
 MAP_CELL_PX = 16
-MIN_CONTRAST = 4.0                     # labels on a map: WCAG contrast with every colour under the text
+SVG_MIN_FONT = 1.5                     # px: the smallest label of an SVG map (readable zoomed in)
+MIN_CONTRAST = 4.0                    # labels on a map: WCAG contrast with every colour under the text
 # --region on --style map: central meridian, then the west, east, south and north limits
 REGION_VIEW = {"africa": (17, -20, 55, -36, 38), "asia": (90, 25, 150, -12, 56),
                "europe": (15, -25, 50, 34, 72), "north-america": (-100, -170, -50, 6, 84),
@@ -1924,6 +1925,12 @@ def text_size(f, s):
     return r - l, asc + desc
 
 
+def text_size_at(s, size, bold=False):
+    """text_size at any size, even below the smallest font: measured at 64 px and scaled."""
+    w, h = text_size(font(64, bold), s)
+    return w * size / 64, h * size / 64
+
+
 class Canvas:
     def __init__(self, G, cs, theme):
         self.G, self.cs, self.th = G, cs, theme
@@ -2209,11 +2216,16 @@ class SvgDrawer:
 
     def text(self, xy, s, size, bold, fill, anchor="la", halo=None, halo_w=0):
         x, y = xy
-        y += font(size, bold).getmetrics()[0]           # PIL anchors at the ascender, SVG at the baseline
         a = ' text-anchor="middle"' if anchor[0] == "m" else ""
         w = ' font-weight="bold"' if bold else ""
         h = (f' stroke="{halo}" stroke-width="{2 * halo_w}" paint-order="stroke" stroke-linejoin="round"'
              if halo else "")
+        if size < 8:                 # tiny labels of a map, to be read zoomed in: finer numbers
+            y += font(64, bold).getmetrics()[0] * size / 64
+            self.parts.append(f'<text x="{x:.2f}" y="{y:.2f}" font-family="{self.FONT}" font-size="{size:.2f}px"'
+                              f'{w}{a} fill="{fill}"{h}>{xml_escape(s)}</text>')
+            return
+        y += font(size, bold).getmetrics()[0]           # PIL anchors at the ascender, SVG at the baseline
         self.parts.append(f'<text x="{x:.1f}" y="{y:.1f}" font-family="{self.FONT}" font-size="{size:.1f}px"'
                           f'{w}{a} fill="{fill}"{h}>{xml_escape(s)}</text>')
 
@@ -2415,8 +2427,69 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             readable[ink] = np.array(
                 [min(contrast_ratio(ink, sea), contrast_ratio(ink, th["page"])) >= MIN_CONTRAST]
                 + [contrast_ratio(ink, colour_of[i]) >= MIN_CONTRAST for i in range(1, n + 1)])
+    # An SVG map can be zoomed: labels are fitted on a grid of 2 px instead of a
+    # cell, whole inside their country, and shrink down to SVG_MIN_FONT.
+    fine = None
+    if geo and out_path.lower().endswith(".svg"):
+        k = max(cs // 2, 1)
+        img = Image.new("I", (G.shape[1] * k, G.shape[0] * k), 0)
+        draw = ImageDraw.Draw(img)
+        for j, polys in px_shapes:
+            for poly in polys:
+                for h, ring in enumerate(poly):
+                    if len(ring) >= 3:
+                        draw.polygon([tuple(p) for p in (ring * k / cs - 0.5).tolist()], fill=0 if h else j)
+        Gf = np.array(img, dtype=np.int32)
+        fine = {"k": k, "G": Gf, "occ": np.kron(canvas.occ, np.ones((k, k), bool)),
+                "boxes": find_objects(Gf, max_label=n)}
+
+    def place_fine(i, name, value, ink):
+        """Put the label of i whole inside it on the fine grid, as big as it fits."""
+        Gf, focc, k = fine["G"], fine["occ"], fine["k"]
+        sl = fine["boxes"][i - 1]
+        if sl is None:
+            return False
+        f = cs / k                                   # pixels per fine cell
+        sub = np.pad(Gf[sl] == i, 1)
+        dist = distance_transform_edt(sub)[1:-1, 1:-1]
+        ys, xs = np.nonzero(dist > 0)
+        ys, xs, dv = ys + sl[0].start, xs + sl[1].start, dist[ys, xs]
+        cy, cx = (centre[i] + 0.5) * k
+        fs = cs * min(0.9 + 0.09 * math.sqrt(T[i]), 6.5)
+        while fs >= SVG_MIN_FONT:
+            sizes = [text_size_at(name, fs), text_size_at(value, fs * 0.8)]
+            bw, bh = max(w for w, h in sizes), sum(h for w, h in sizes) * 1.08
+            ok = dv * f >= bh / 2
+            if ok.any():
+                cand = np.nonzero(ok)[0]
+                cand = cand[np.lexsort(((ys[cand] - cy) ** 2 + (xs[cand] - cx) ** 2, -dv[cand]))][:60]
+                for c in cand:
+                    px, py = (xs[c] + 0.5) * f, (ys[c] + 0.5) * f
+                    box = (px - bw / 2, py - bh / 2, px + bw / 2, py + bh / 2)
+                    if not canvas.inside(*box):
+                        continue
+                    r0, r1 = max(int(box[1] // f), 0), int(math.ceil(box[3] / f))
+                    c0, c1 = max(int(box[0] // f), 0), int(math.ceil(box[2] / f))
+                    if (Gf[r0:r1, c0:c1] == i).mean() < 0.97 or focc[r0:r1, c0:c1].any():
+                        continue
+                    y = box[1]
+                    for s, size, (w, h) in zip((name, value), (fs, fs * 0.8), sizes):
+                        dr.text((px, y), s, size, False, ink, anchor="ma")
+                        y += h * 1.08
+                    focc[r0:r1, c0:c1] = True
+                    q0, q1, p0, p1 = canvas.cells(*box)
+                    canvas.occ[q0:q1, p0:p1] = True
+                    return True
+            fs *= 0.9
+        return False
+
     for i in order:
         if T[i] == 0:
+            continue
+        if fine is not None:
+            ink = max(("#141414", "#ffffff"), key=lambda c: contrast_ratio(c, colour_of[i]))
+            if not place_fine(i, units[i - 1]["name"], value_text(i), ink):
+                external.append(i)
             continue
         mine = G == i
         if not mine.any():
@@ -2481,32 +2554,50 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     # a halo, only on colours the text reads on, and a label that would cover
     # another is left out rather than overlap.
     efs = max(cs * 0.7, 8) if geo else max(cs * 0.95, 8)
-    land = G > 0
+    # an SVG map searches on its fine grid: Gx, cells of gs pixels
+    Gx, gs, occ = (fine["G"], cs / fine["k"], fine["occ"]) if fine else (G, cs, canvas.occ)
+    H_, W_ = Gx.shape
+    land = Gx > 0
     halo = th["ocean"] or th["bg"]
     dirs = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36 if geo else 24, endpoint=False)]
     leaders, ext_texts = [], []
-    wired = np.zeros_like(canvas.occ)
-    ext_ok = readable[th["label"]][G] if geo else None
+    wired = np.zeros_like(occ)
+    ext_ok = readable[th["label"]][Gx] if geo else None
     unlabelled = []
+
+    def cells(box):
+        x0, y0, x1, y1 = box
+        return (max(int(y0 // gs), 0), min(int(math.ceil(y1 / gs)), H_),
+                max(int(x0 // gs), 0), min(int(math.ceil(x1 / gs)), W_))
+
     for i in external:
         s = f"{units[i - 1]['name']} {value_text(i)}"
-        ys, xs = np.nonzero(main_part(G == i))
-        ay, ax = (ys.mean() + 0.5) * cs, (xs.mean() + 0.5) * cs
+        ys, xs = np.nonzero(main_part(Gx == i))
+        if len(ys) == 0:                 # too small for the fine grid: its cell's centre
+            ys, xs = (np.array([int((centre[i][j] + 0.5) * cs / gs)]) for j in (0, 1))
+        ay, ax = (ys.mean() + 0.5) * gs, (xs.mean() + 0.5) * gs
 
         def leader_cells(box):
             """The cells under the leader from the nearest part of the country to the label."""
             bx, by = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
-            k = np.argmin(((ys + 0.5) * cs - by) ** 2 + ((xs + 0.5) * cs - bx) ** 2)
-            tyc, txc = (ys[k] + 0.5) * cs, (xs[k] + 0.5) * cs
+            k = np.argmin(((ys + 0.5) * gs - by) ** 2 + ((xs + 0.5) * gs - bx) ** 2)
+            tyc, txc = (ys[k] + 0.5) * gs, (xs[k] + 0.5) * gs
             ex, ey = min(max(txc, box[0]), box[2]), min(max(tyc, box[1]), box[3])
-            t = np.linspace(0, 1, 2 * int(math.hypot(ex - txc, ey - tyc) / cs) + 3)[1:-1]
-            cells = (np.clip((tyc + (ey - tyc) * t) // cs, 0, G.shape[0] - 1).astype(int),
-                     np.clip((txc + (ex - txc) * t) // cs, 0, G.shape[1] - 1).astype(int))
+            t = np.linspace(0, 1, 2 * int(math.hypot(ex - txc, ey - tyc) / gs) + 3)[1:-1]
+            cells = (np.clip((tyc + (ey - tyc) * t) // gs, 0, H_ - 1).astype(int),
+                     np.clip((txc + (ex - txc) * t) // gs, 0, W_ - 1).astype(int))
             return cells, (ex, ey, txc, tyc)
 
-        for size in ((efs, max(cs * 0.55, 8)) if geo else (efs,)):     # a map tries smaller text too
-            bw, bh = text_size(font(size), s)
-            bw, bh = bw + 4, bh + 2
+        # a map tries smaller text too; an SVG map has small labels only
+        sizes = (cs * 0.3, cs * 0.18, cs * 0.1) if fine else (efs, max(cs * 0.55, 8)) if geo else (efs,)
+        overall = None                   # SVG: the best of all sizes, a smaller one rather than a long leader
+        for n_size, size in enumerate(sizes):
+            if fine:
+                bw, bh = text_size_at(s, size)
+                bw, bh = bw + size * 0.3, bh + size * 0.15
+            else:
+                bw, bh = text_size(font(size), s)
+                bw, bh = bw + 4, bh + 2
             best = None
             for r in range(1, 20 if geo else 50):
                 if best is not None and best[0] < r:
@@ -2518,33 +2609,43 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                     box = (x0, y0, x0 + bw, y0 + bh)
                     if not canvas.inside(*box):
                         continue
-                    r0, r1, c0, c1 = canvas.cells(*box)
-                    score = 1000 * canvas.occ[r0:r1, c0:c1].sum() + 0.6 * land[r0:r1, c0:c1].sum() + r
+                    r0, r1, c0, c1 = cells(box)
+                    score = (1000 * occ[r0:r1, c0:c1].sum()
+                             + 0.6 * (gs / cs) ** 2 * land[r0:r1, c0:c1].sum() + r)
                     if geo:                # only on colours the text reads on; no crossing other labels
-                        a, c = int(round(y0 / cs)), int(round(x0 / cs))
-                        score += 1000 * (~ext_ok[a:max(int(round((y0 + bh) / cs)), a + 1),
-                                                 c:max(int(round((x0 + bw) / cs)), c + 1)]).sum()
+                        a, c = int(round(y0 / gs)), int(round(x0 / gs))
+                        score += 1000 * (~ext_ok[a:max(int(round((y0 + bh) / gs)), a + 1),
+                                                 c:max(int(round((x0 + bw) / gs)), c + 1)]).sum()
                         (ly, lx), _ = leader_cells(box)
-                        score += (1000 * (canvas.occ[ly, lx].sum() + wired[r0:r1, c0:c1].sum())
-                                  + 60 * wired[ly, lx].sum())
+                        score += (1000 * (occ[ly, lx].sum() + wired[r0:r1, c0:c1].sum())
+                                  + 60 * gs / cs * wired[ly, lx].sum())
+                        if fine:           # a short leader, not one across other countries
+                            over = Gx[ly, lx]
+                            score += 0.5 * ((over != 0) & (over != i)).sum()
                     if best is None or score < best[0]:
                         best = (score, box)
+            if fine:
+                if best is not None and (overall is None or best[0] + 4 * n_size < overall[0]):
+                    overall = (best[0] + 4 * n_size, best[1], size)
+                continue
             if best is not None and best[0] < 1000:
                 break
+        if fine and overall is not None:
+            best, size = overall[:2], overall[2]
         if best is None or (geo and best[0] >= 1000):
             unlabelled.append(units[i - 1]["name"])
             continue
         box = best[1]
-        r0, r1, c0, c1 = canvas.cells(*box)
-        canvas.occ[r0:r1, c0:c1] = True
-        cells, (ex, ey, txc, tyc) = leader_cells(box)
-        if math.hypot(ex - txc, ey - tyc) > cs * 0.9:
+        r0, r1, c0, c1 = cells(box)
+        occ[r0:r1, c0:c1] = True
+        cells_, (ex, ey, txc, tyc) = leader_cells(box)
+        if math.hypot(ex - txc, ey - tyc) > (cs * 0.3 if fine else cs * 0.9):
             leaders.append((ex, ey, txc, tyc))
-            wired[cells] = True
-        ext_texts.append(((box[0] + 2, box[1] + 1), s, size))
+            wired[cells_] = True
+        ext_texts.append(((box[0] + (size * 0.15 if fine else 2), box[1] + (size * 0.07 if fine else 1)), s, size))
     if unlabelled:
         log(f"  no room for {len(unlabelled)} label(s): {', '.join(unlabelled)}")
-    dr.lines(leaders, th["lead"], max(1, cs // 10))
+    dr.lines(leaders, th["lead"], cs * 0.03 if fine else max(1, cs // 10))
     for xy, s, size in ext_texts:
         dr.text(xy, s, size, False, th["label"], anchor="la", halo=None if geo else halo, halo_w=max(1, cs // 7))
 
