@@ -1,5 +1,9 @@
 # World population cartogram, updated
 
+[![CI](https://github.com/mcampilho/population-cartogram/actions/workflows/ci.yml/badge.svg)](https://github.com/mcampilho/population-cartogram/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 *[Versão em português](README.pt.md)*
 
 Every square is **500,000 people**. Countries keep their rough shape and their place on the
@@ -49,7 +53,7 @@ This map would not exist without:
 
 ## Usage
 
-Requires Python 3.9+ and:
+Requires Python 3.10+ and:
 
 ```bash
 pip install numpy scipy pillow
@@ -301,6 +305,22 @@ difference) from its neighbours' colours, so neighbours never share a colour or 
 - Small countries in crowded areas (Europe, the Caribbean) have small labels; zoom in.
 - The World Bank and the UN do not always agree on borders and on what a country includes; the
   figures used are written by `--csv`.
+
+## Development
+
+The dependencies and tool settings are in `pyproject.toml`. The tests need no network or map
+data: they check the text tables, class breaks, projections (equal-area ones really keep areas),
+colours and caches, and draw a made-up world of three countries in every style and format.
+
+```bash
+pip install pytest ruff mypy reportlab
+pytest -q
+ruff check .
+mypy population_cartogram.py
+```
+
+GitHub Actions runs the same on Linux and Windows with Python 3.10 and 3.13 for every push.
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

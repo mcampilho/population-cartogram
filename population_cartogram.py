@@ -68,7 +68,6 @@ import json
 import locale
 import math
 import os
-import pickle
 import sys
 import time
 import urllib.request
@@ -567,7 +566,7 @@ def rasterize(units, frame):
         rings.append((area, k, prepared))
     img = Image.new("I", (frame.w, frame.h), 0)
     draw = ImageDraw.Draw(img)
-    for area, k, prepared in sorted(rings, key=lambda r: -r[0]):
+    for _area, k, prepared in sorted(rings, key=lambda r: -r[0]):
         for pr in prepared:
             if len(pr[0]) >= 3:
                 draw.polygon(pr[0], fill=k + 1)
@@ -1289,7 +1288,7 @@ def rubber_sheet(shapes, target, extra, iterations=15):
     cuts = np.cumsum([len(r) for r in rings])[:-1]
     P = np.vstack(rings + [extra])
     n_ring_pts = len(P) - len(extra)
-    for it in range(iterations):
+    for _ in range(iterations):
         parts = {}                           # (country, polygon) -> [area, sx, sy]
         for (i, k, outer), ring in zip(owner, np.split(P[:n_ring_pts], cuts)):
             x, y = ring[:, 0], ring[:, 1]
@@ -1305,13 +1304,13 @@ def rubber_sheet(shapes, target, extra, iterations=15):
             else:
                 e[0] -= abs(a)
         country = collections.defaultdict(float)
-        for (i, k), (a, _, _) in parts.items():
+        for (i, _k), (a, _, _) in parts.items():
             country[i] += a
         errs = [abs(country[i] - target[i]) / target[i] for i in country if target[i] > 0]
         force = 1 / (1 + np.mean(errs))
         move = np.zeros_like(P)
         with np.errstate(divide="ignore", invalid="ignore"):
-            for (i, k), (a, sx, sy) in parts.items():
+            for (i, _k), (a, sx, sy) in parts.items():
                 if a < 0.02 or country[i] <= 0:
                     continue
                 want = a * target[i] / country[i]
@@ -1328,6 +1327,31 @@ def rubber_sheet(shapes, target, extra, iterations=15):
     for ring, new in zip(rings, np.split(P[:n_ring_pts], cuts)):
         ring[:] = new
     return P[n_ring_pts:]
+
+
+def save_outlines(path, G, T, centre, shapes):
+    """Cache the result of layout_outlines as plain arrays (no pickle): every ring's
+    points one after another, with the counts that rebuild the nesting."""
+    rings = [ring for _, polys in shapes for poly in polys for ring in poly]
+    np.savez_compressed(path, G=G, T=T, centre=centre,
+                        ids=np.array([i for i, _ in shapes], int),
+                        polys_per_unit=np.array([len(polys) for _, polys in shapes], int),
+                        rings_per_poly=np.array([len(poly) for _, polys in shapes for poly in polys], int),
+                        points_per_ring=np.array([len(r) for r in rings], int),
+                        points=np.vstack(rings) if rings else np.zeros((0, 2)))
+
+
+def load_outlines(path):
+    """The inverse of save_outlines: (G, T, centre, shapes)."""
+    with np.load(path) as z:
+        G, T, centre, pts = z["G"], z["T"], z["centre"], z["points"]
+        ids, n_polys, n_rings, n_pts = (z[k].tolist() for k in ("ids", "polys_per_unit", "rings_per_poly",
+                                                                 "points_per_ring"))
+    rings = np.split(pts, np.cumsum(n_pts)[:-1]) if n_pts else []
+    it_rings, it_polys = iter(rings), iter(n_rings)
+    shapes = [(i, [[next(it_rings) for _ in range(next(it_polys))] for _ in range(np_)])
+              for i, np_ in zip(ids, n_polys)]
+    return G, T, centre, shapes
 
 
 def layout_outlines(units, frame, lab, pix, y, x, pops, per_cell, rho_bar):
@@ -1576,7 +1600,7 @@ def layout_map(units, projection, lon0=0.0, view=None):
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
-_FONT_PATHS = {}
+_FONT_PATHS: dict[bool, str | None] = {}
 
 
 def font(size, bold=False):
@@ -1816,8 +1840,8 @@ def palette_warnings(name, mode, m):
             if D[a, b] < SIMILAR_DE:
                 out.append(f"{name}/{mode}: {cs[a]} and {cs[b]} look alike (difference {D[a, b]:.1f})")
     bg = rgb_to_lab(np.array(hex_rgb(m["background"])))
-    for c, l in zip(cs, lab):
-        d = float(delta_e(l, bg))
+    for c, c_lab in zip(cs, lab):
+        d = float(delta_e(c_lab, bg))
         if d < SIMILAR_DE:
             out.append(f"{name}/{mode}: {c} is close to the background (difference {d:.1f})")
     r = contrast_ratio(m["box_text"], m["box_fill"])
@@ -1921,9 +1945,9 @@ def fmt_pop(p, tx):
 
 
 def text_size(f, s):
-    l, t, r, b = f.getbbox(s)
+    x0, _, x1, _ = f.getbbox(s)
     asc, desc = f.getmetrics()
-    return r - l, asc + desc
+    return x1 - x0, asc + desc
 
 
 def text_size_at(s, size, bold=False):
@@ -2633,7 +2657,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                     if (Gf[r0:r1, c0:c1] == i).mean() < 0.97 or focc[r0:r1, c0:c1].any():
                         continue
                     y = box[1]
-                    for s, size, (w, h) in zip((name, value), (fs, fs * 0.8), sizes):
+                    for s, size, (_w, h) in zip((name, value), (fs, fs * 0.8), sizes):
                         dr.text((px, y), s, size, False, ink, anchor="ma")
                         y += h * 1.08
                     focc[r0:r1, c0:c1] = True
@@ -2737,7 +2761,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             ys, xs = (np.array([int((centre[i][j] + 0.5) * cs / gs)]) for j in (0, 1))
         ay, ax = (ys.mean() + 0.5) * gs, (xs.mean() + 0.5) * gs
 
-        def leader_cells(box):
+        def leader_cells(box, ys=ys, xs=xs):
             """The cells under the leader from the nearest part of the country to the label."""
             bx, by = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
             k = np.argmin(((ys + 0.5) * gs - by) ** 2 + ((xs + 0.5) * gs - bx) ** 2)
@@ -3024,9 +3048,16 @@ def roundest(a, b):
         return 0.0
     top = math.floor(math.log10(max(abs(a), abs(b))))
     for d in range(17):
-        x = (math.floor(a / 10.0 ** (top - d)) + 1) * 10.0 ** (top - d)
+        step, digits = 10.0 ** (top - d), max(0, d - top)
+        k = math.floor(a / step)
+        # compare the rounded number: 5.0001 must count as <= 5.0001, and a / step
+        # may fall just below a whole number (5 / 1e-5 = 499999.99...)
+        for x in ((k + 1) * step, (k + 2) * step):
+            x = float(f"{x:.{digits}f}")
+            if x > a:
+                break
         if x <= b:
-            return float(f"{x:.{max(0, d - top)}f}")
+            return x
     return b
 
 
@@ -3099,7 +3130,8 @@ def region_summary(region_key, units, T, pops, tx):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="World population cartogram, as squares or as country outlines.")
     ap.add_argument("--theme", choices=["light", "dark", "both"], default="light")
-    ap.add_argument("--palette", metavar="NAME", help="colour palette from the palette file (default: the file's default)")
+    ap.add_argument("--palette", metavar="NAME",
+                    help="colour palette from the palette file (default: the file's default)")
     ap.add_argument("--palettes", metavar="FILE", help="palette file (default: palettes.json next to this script)")
     ap.add_argument("--list-palettes", action="store_true", help="list the palettes, check them and exit")
     ap.add_argument("--style", choices=["squares", "outlines", "map"], default="squares",
@@ -3225,7 +3257,8 @@ def main(argv=None):
 
         # the cartogram is the slow part: keep it for runs with the same inputs
         key = hashlib.sha1(json.dumps([CARTOGRAM_VERSION, a.detail, a.passes, a.ocean, a.rural, a.blur_km,
-                                       [u["code"] for u in units], pops.tolist()]).encode()).hexdigest()[:16]
+                                       [u["code"] for u in units], pops.tolist()]).encode(),
+                           usedforsecurity=False).hexdigest()[:16]
         cpath = os.path.join(a.cache, f"cartogram_{key}.npz")
         if os.path.exists(cpath):
             log("using the cached cartogram")
@@ -3237,22 +3270,20 @@ def main(argv=None):
             np.savez_compressed(cpath, y=y.astype(np.float32), x=x.astype(np.float32), rho_bar=rho_bar)
 
         if a.style == "outlines":
-            opath = os.path.join(a.cache, f"outlines_{key}_{int(a.per_cell)}_v{OUTLINES_VERSION}.pickle")
+            opath = os.path.join(a.cache, f"outlines_{key}_{int(a.per_cell)}_v{OUTLINES_VERSION}.npz")
             if os.path.exists(opath):
                 log("using the cached outlines")
-                with open(opath, "rb") as f:
-                    G, T, centre, shapes = pickle.load(f)
+                G, T, centre, shapes = load_outlines(opath)
             else:
                 log("deforming the borders (the result is cached)")
                 G, T, centre, shapes = layout_outlines(units, frame, lab, pix, y, x, pops, a.per_cell, rho_bar)
-                with open(opath, "wb") as f:
-                    pickle.dump((G, T, centre, shapes), f)
+                save_outlines(opath, G, T, centre, shapes)
         else:
             log("fitting the squares")
             G, T, centre = make_grid(lab, pix, y, x, pops, a.per_cell, rho_bar)
 
     conts = collections.Counter()
-    for k, u in enumerate(units):
+    for u in units:
         conts[u["continent"]] += u["pop"]
     wb_years = collections.Counter(u["year"] for u in units if u["source"] == "World Bank")
     owid = sorted(u["name"] for u in units if u["source"].startswith("UN WPP"))

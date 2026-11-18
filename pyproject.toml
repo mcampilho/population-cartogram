@@ -1,0 +1,50 @@
+[project]
+name = "population-cartogram"
+version = "1.0.0"
+description = "World population cartogram and thematic maps (PNG, SVG, PDF), with up-to-date data"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Miguel Campilho" }]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pillow>=10.1",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.optional-dependencies]
+pdf = ["reportlab>=4.0"]
+
+[project.urls]
+Homepage = "https://github.com/mcampilho/population-cartogram"
+Issues = "https://github.com/mcampilho/population-cartogram/issues"
+
+# The script runs from its folder (palettes.json lives next to it), so the project
+# is not built or installed: this file declares the dependencies and the tools.
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "reportlab>=4.0"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["B905"]          # zip() without strict=: the zipped sequences have the same length by construction
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["E501"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["test"]       # tests/ is a local folder of generated maps, ignored by git

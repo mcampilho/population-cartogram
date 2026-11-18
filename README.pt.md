@@ -1,5 +1,9 @@
 # Cartograma da população mundial, atualizado
 
+[![CI](https://github.com/mcampilho/population-cartogram/actions/workflows/ci.yml/badge.svg)](https://github.com/mcampilho/population-cartogram/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+[![Licença: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 *[English version](README.md)*
 
 Cada quadrado são **500 000 pessoas**. Os países mantêm aproximadamente a forma e o lugar no
@@ -50,7 +54,7 @@ Este mapa não existiria sem:
 
 ## Utilização
 
-Precisa de Python 3.9+ e de:
+Precisa de Python 3.10+ e de:
 
 ```bash
 pip install numpy scipy pillow
@@ -302,6 +306,23 @@ cores dos vizinhos, para que vizinhos nunca tenham a mesma cor nem tons quase ig
 - Os países pequenos em zonas apertadas (Europa, Caraíbas) têm legendas pequenas; é preciso ampliar.
 - O Banco Mundial e a ONU nem sempre concordam nas fronteiras e no que cada país inclui; os números
   usados ficam registados com `--csv`.
+
+## Desenvolvimento
+
+As dependências e a configuração das ferramentas estão no `pyproject.toml`. Os testes não precisam
+de rede nem de dados de mapas: verificam as tabelas de textos, as classes, as projeções (as
+equivalentes conservam mesmo as áreas), as cores e as caches, e desenham um mundo inventado de três
+países em todos os estilos e formatos.
+
+```bash
+pip install pytest ruff mypy reportlab
+pytest -q
+ruff check .
+mypy population_cartogram.py
+```
+
+O GitHub Actions corre o mesmo em Linux e Windows, com Python 3.10 e 3.13, a cada push. As
+alterações estão no [CHANGELOG.md](CHANGELOG.md).
 
 ## Licença
 

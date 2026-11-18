@@ -1,5 +1,16 @@
 __pycache__/
 *.pyc
+.venv/
+venv/
+.env
+build/
+dist/
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # maps generated while trying things out (the published examples are in examples/)
 /tests/
