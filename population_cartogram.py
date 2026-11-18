@@ -71,6 +71,7 @@ import os
 import sys
 import time
 import urllib.request
+from types import SimpleNamespace
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -2453,20 +2454,64 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     """Draw the cartogram. thematic: colour countries by a value (see
     thematic_spec); region: only label and list the countries of one region and
     fade the others."""
-    G, T, centre, units, pops, info, per_cell = (layout[k] for k in
-                                                 ("G", "T", "centre", "units", "pops", "info", "per_cell"))
+    units, pops, T = layout["units"], layout["pops"], layout["T"]
     tx = TEXTS[lang]
     n = len(units)
     focus = region["members"] if region else None
-    shapes = layout.get("shapes")
-    off_r, off_c = layout.get("shape_off", (0, 0))
-    geo = layout.get("sphere") is not None          # --style map: every country is on the map
 
     def shown(i):
         return focus is None or i in focus
 
-    # --- colours
+    colour_of, classes, missing_colour = country_colours(layout["G"], units, th, thematic, shown)
+
+    def value_text(i):
+        if thematic and thematic.get("value_text") is not None:
+            return thematic["value_text"].get(i, "–")
+        return fmt_pop(pops[i], tx)
+
+    # what the drawing steps share; place_boxes adds G, centre, off and canvas,
+    # start_drawing dr and sea
+    sc = SimpleNamespace(cs=cs, th=th, tx=tx, units=units, pops=pops, T=T, n=n, world=layout["info"]["world"],
+                         geo=layout.get("sphere") is not None,        # --style map: every country is on the map
+                         colour_of=colour_of, value_text=value_text, pad=min(cs, 25))
+    boxes = place_boxes(sc, layout, thematic, classes, region, shown)
+    vector, px_shapes = start_drawing(sc, layout, thematic, out_path)
+
+    # A geographic map draws text without a halo, so a label may only lie on
+    # colours it contrasts with: readable[ink][id], id 0 being the sea and the page.
+    sc.readable = {}
+    if sc.geo:
+        for ink in ("#141414", "#ffffff", th["label"]):
+            sc.readable[ink] = np.array(
+                [min(contrast_ratio(ink, sc.sea), contrast_ratio(ink, th["page"])) >= MIN_CONTRAST]
+                + [contrast_ratio(ink, colour_of[i]) >= MIN_CONTRAST for i in range(1, n + 1)])
+    sc.fine = fine_grid(sc, px_shapes) if sc.geo and vector else None
+
+    external = []
+    for i in sorted((i for i in range(1, n + 1) if shown(i)), key=lambda k: -pops[k]):
+        if T[i] == 0 or (sc.fine is None and not (sc.G == i).any()):
+            continue
+        if sc.fine is not None:
+            ink = max(("#141414", "#ffffff"), key=lambda c: contrast_ratio(c, colour_of[i]))
+            placed = place_fine(sc, i, units[i - 1]["name"], value_text(i), ink)
+        else:
+            placed = label_inside(sc, i, thematic)
+        if not placed:
+            external.append(i)
+    labels_outside(sc, external)
+    draw_boxes(sc, boxes, missing_colour)
+
+    w, h = sc.dr.save(out_path)
+    log(f"saved {out_path} ({w}x{h})")
+
+
+def country_colours(G, units, th, thematic, shown):
+    """The fill of every country (index 1..n): by class on a thematic map, else
+    palette colours that differ from the neighbours'; faded outside the region.
+    Returns (colours, class colours or None, the colour of 'no data')."""
+    n = len(units)
     missing_colour = mix(th["bg"], "#9a9a9a", 0.55)
+    classes = None
     if thematic:
         classes = thematic_colours(thematic, th)
         cls = thematic["cls"]
@@ -2481,20 +2526,23 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     for i in range(1, n + 1):
         if not shown(i):
             colour_of[i] = mix(colour_of[i], th["bg"], 0.72)
+    return colour_of, classes, missing_colour
 
-    def value_text(i):
-        if thematic and thematic.get("value_text") is not None:
-            return thematic["value_text"].get(i, "–")
-        return fmt_pop(pops[i], tx)
 
-    # --- title and "not on the map" boxes; grow the canvas when there is no room
-    pad = min(cs, 25)
-    title = wrap_lines(layout_title(tx, info, per_cell, cs, region), box_font(cs) * 22)
+def place_boxes(sc, layout, thematic, classes, region, shown):
+    """Find room for the title, the legend and the "not on the map" list, growing
+    the canvas when there is none. Sets sc.G, sc.centre, sc.off and sc.canvas."""
+    G, centre, units, pops, T, cs, tx, pad = (layout["G"], layout["centre"], sc.units, sc.pops, sc.T,
+                                              sc.cs, sc.tx, sc.pad)
+    n = sc.n
+    off_r, off_c = layout.get("shape_off", (0, 0))
+    title = wrap_lines(layout_title(tx, layout["info"], layout["per_cell"], cs, region), box_font(cs) * 22)
     legend = wrap_lines(legend_lines(tx, thematic, classes, cs), box_font(cs) * 22) if thematic else None
     small = [(units[k - 1]["name"], pops[k]) for k in range(1, n + 1)
-             if T[k] == 0 and pops[k] > 0 and shown(k) and not geo]
+             if T[k] == 0 and pops[k] > 0 and shown(k) and not sc.geo]
     small.sort(key=lambda e: -e[1])
-    small_head = tx["small" if shapes is None else "small_outline"].format(n=fmt_num(per_cell / 2, 0, tx))
+    small_head = tx["small" if layout.get("shapes") is None else "small_outline"].format(
+        n=fmt_num(layout["per_cell"] / 2, 0, tx))
     sfs = min(cs * 1.0, 26)
     entries = [f"{name} – {fmt_pop(p, tx)}" for name, p in small]
 
@@ -2506,7 +2554,15 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         lh = text_size(font(sfs), "Ag")[1] * 1.05
         return cols, widths, max(sum(widths) + cs * 1.5 * (ncols - 1), hw), hh * 1.3 + per * lh
 
-    canvas = Canvas(G, cs, th)
+    def grown(G, canvas, rows, cols):
+        """A canvas with rows added at the bottom and cols at the right, keeping what is taken."""
+        G = np.pad(G, ((0, rows), (0, cols)))
+        occ = np.pad(canvas.occ, ((0, rows), (0, cols)))
+        canvas = Canvas(G, cs, sc.th)
+        canvas.occ = occ
+        return G, canvas
+
+    canvas = Canvas(G, cs, sc.th)
     tw, thh = block_size(title)
     pos = canvas.free_box(tw + 2 * pad, thh + 2 * pad, "tl")
     if pos is None:
@@ -2515,7 +2571,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         G = np.pad(G, ((extra, 0), (0, wider)))
         centre = centre + [extra, 0]
         off_r += extra
-        canvas = Canvas(G, cs, th)
+        canvas = Canvas(G, cs, sc.th)
         pos = canvas.free_box(tw + 2 * pad, thh + 2 * pad, "tl")
     title_box = (pos[0], pos[1], pos[0] + tw + 2 * pad, pos[1] + thh + 2 * pad)
     r0, r1, c0, c1 = canvas.cells(*title_box)
@@ -2532,10 +2588,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         if pos is None:      # no room at sea: right under the title box, growing the canvas if needed
             need = int(math.ceil((title_box[3] + lh_ + 3 * pad) / cs)) + 1 - G.shape[0]
             if need > 0:
-                G = np.pad(G, ((0, need), (0, 0)))
-                occ = np.pad(canvas.occ, ((0, need), (0, 0)))
-                canvas = Canvas(G, cs, th)
-                canvas.occ = occ
+                G, canvas = grown(G, canvas, need, 0)
             pos = (title_box[0], int(title_box[3] + pad))
         legend_box = (pos[0], pos[1], pos[0] + lw + 2 * pad, pos[1] + lh_ + 2 * pad)
         r0, r1, c0, c1 = canvas.cells(*legend_box)
@@ -2550,24 +2603,26 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                 break
         if pos is None:
             cols, widths, bw, bh = small_block(min(6, len(entries)))
-            extra = int(math.ceil((bh + 2 * pad) / cs)) + 2
-            G = np.pad(G, ((0, extra), (0, 0)))
-            occ = np.pad(canvas.occ, ((0, extra), (0, 0)))
-            canvas = Canvas(G, cs, th)
-            canvas.occ = occ
+            G, canvas = grown(G, canvas, int(math.ceil((bh + 2 * pad) / cs)) + 2, 0)
             pos = canvas.free_box(bw + 2 * pad, bh + 2 * pad, "br")
         if pos is None:      # wider than the map: widen the canvas to the right
-            extra = int(math.ceil((bw + 2 * pad) / cs)) + 2 - G.shape[1]
-            G = np.pad(G, ((0, 0), (0, max(extra, 0))))
-            occ = np.pad(canvas.occ, ((0, 0), (0, max(extra, 0))))
-            canvas = Canvas(G, cs, th)
-            canvas.occ = occ
+            G, canvas = grown(G, canvas, 0, max(int(math.ceil((bw + 2 * pad) / cs)) + 2 - G.shape[1], 0))
             pos = canvas.free_box(bw + 2 * pad, bh + 2 * pad, "br")
         small_box = (pos[0], pos[1], pos[0] + bw + 2 * pad, pos[1] + bh + 2 * pad, cols, widths)
         r0, r1, c0, c1 = canvas.cells(*small_box[:4])
         canvas.occ[r0:r1, c0:c1] = True
 
-    # --- squares
+    sc.G, sc.centre, sc.off, sc.canvas = G, centre, (off_r, off_c), canvas
+    return {"title": (title_box, title), "legend": (legend_box, legend),
+            "small": (small_box, small_head, sfs)}
+
+
+def start_drawing(sc, layout, thematic, out_path):
+    """Pick the back-end for out_path and draw the countries (squares, outlines or
+    a map on its globe). Sets sc.dr and sc.sea; returns (vector?, outlines in pixels)."""
+    th, cs, n, colour_of, G = sc.th, sc.cs, sc.n, sc.colour_of, sc.G
+    off_r, off_c = sc.off
+    shapes = layout.get("shapes")
     sea = th["ocean"] or th["bg"]
     fills = [sea] + colour_of[1:]
     gaps = [th["grid"] or th["bg"]] + [
@@ -2581,14 +2636,15 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     # thematic maps: neighbours may share a (pale) colour, so the outlines must stand out
     edge = mix(th["border"], th["bg"], 0.3) if thematic else th["edge"]
     globe = None
-    if geo:
+    if sc.geo:
         globe = {"page": th["page"], "rim": th["rim"], "graticule_colour": th["graticule"],
                  "sphere": (layout["sphere"] + [off_c, off_r]) * cs,
                  "graticule": [(g + [off_c, off_r]) * cs for g in layout["graticule"]]}
         edge = mix(th["border"], th["bg"], 0.45)
     vector = vector_output(out_path)
     if out_path.lower().endswith(".svg"):
-        names = {i: (units[i - 1]["code"], f"{units[i - 1]['name']} – {fmt_pop(pops[i], tx)}")
+        units, pops = sc.units, sc.pops
+        names = {i: (units[i - 1]["code"], f"{units[i - 1]['name']} – {fmt_pop(pops[i], sc.tx)}")
                  for i in range(1, n + 1)}
         dr = SvgDrawer(G, cs, fills, gaps, sea, th["grid"], names, px_shapes, edge, globe)
     elif vector:
@@ -2598,155 +2654,143 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
     if thematic and shapes is None:
         segs = border_segments(G, cs)
         dr.lines(segs, th["border"], max(1, cs // 6))
+    sc.dr, sc.sea = dr, sea
+    return vector, px_shapes
 
-    # --- labels inside countries
-    world = info["world"]
-    order = sorted((i for i in range(1, n + 1) if shown(i)), key=lambda k: -pops[k])
-    external = []
-    # A geographic map draws text without a halo, so a label may only lie on
-    # colours it contrasts with: readable[ink][id], id 0 being the sea and the page.
-    readable = {}
-    if geo:
-        for ink in ("#141414", "#ffffff", th["label"]):
-            readable[ink] = np.array(
-                [min(contrast_ratio(ink, sea), contrast_ratio(ink, th["page"])) >= MIN_CONTRAST]
-                + [contrast_ratio(ink, colour_of[i]) >= MIN_CONTRAST for i in range(1, n + 1)])
-    # An SVG or PDF map can be zoomed: labels are fitted on a grid of 2 px instead
-    # of a cell, whole inside their country, and shrink down to SVG_MIN_FONT.
-    fine = None
-    if geo and vector:
-        k = max(cs // 2, 1)
-        img = Image.new("I", (G.shape[1] * k, G.shape[0] * k), 0)
-        draw = ImageDraw.Draw(img)
-        for j, polys in px_shapes:
-            for poly in polys:
-                for h, ring in enumerate(poly):
-                    if len(ring) >= 3:
-                        draw.polygon([tuple(p) for p in (ring * k / cs - 0.5).tolist()], fill=0 if h else j)
-        Gf = np.array(img, dtype=np.int32)
-        fine = {"k": k, "G": Gf, "occ": np.kron(canvas.occ, np.ones((k, k), bool)),
-                "boxes": find_objects(Gf, max_label=n)}
 
-    def place_fine(i, name, value, ink):
-        """Put the label of i whole inside it on the fine grid, as big as it fits."""
-        Gf, focc, k = fine["G"], fine["occ"], fine["k"]
-        sl = fine["boxes"][i - 1]
-        if sl is None:
-            return False
-        f = cs / k                                   # pixels per fine cell
-        sub = np.pad(Gf[sl] == i, 1)
-        dist = distance_transform_edt(sub)[1:-1, 1:-1]
-        ys, xs = np.nonzero(dist > 0)
-        ys, xs, dv = ys + sl[0].start, xs + sl[1].start, dist[ys, xs]
-        cy, cx = (centre[i] + 0.5) * k
-        fs = cs * min(0.9 + 0.09 * math.sqrt(T[i]), 6.5)
-        while fs >= SVG_MIN_FONT:
-            sizes = [text_size_at(name, fs), text_size_at(value, fs * 0.8)]
-            bw, bh = max(w for w, h in sizes), sum(h for w, h in sizes) * 1.08
-            ok = dv * f >= bh / 2
-            if ok.any():
-                cand = np.nonzero(ok)[0]
-                cand = cand[np.lexsort(((ys[cand] - cy) ** 2 + (xs[cand] - cx) ** 2, -dv[cand]))][:60]
-                for c in cand:
-                    px, py = (xs[c] + 0.5) * f, (ys[c] + 0.5) * f
-                    box = (px - bw / 2, py - bh / 2, px + bw / 2, py + bh / 2)
-                    if not canvas.inside(*box):
-                        continue
-                    r0, r1 = max(int(box[1] // f), 0), int(math.ceil(box[3] / f))
-                    c0, c1 = max(int(box[0] // f), 0), int(math.ceil(box[2] / f))
-                    if (Gf[r0:r1, c0:c1] == i).mean() < 0.97 or focc[r0:r1, c0:c1].any():
-                        continue
-                    y = box[1]
-                    for s, size, (_w, h) in zip((name, value), (fs, fs * 0.8), sizes):
-                        dr.text((px, y), s, size, False, ink, anchor="ma")
-                        y += h * 1.08
-                    focc[r0:r1, c0:c1] = True
-                    q0, q1, p0, p1 = canvas.cells(*box)
-                    canvas.occ[q0:q1, p0:p1] = True
-                    return True
-            fs *= 0.9
+def fine_grid(sc, px_shapes):
+    """An SVG or PDF map can be zoomed: labels are fitted on a grid of 2 px instead
+    of a cell, whole inside their country, and shrink down to SVG_MIN_FONT. The
+    outlines rasterised again on that grid, with what is taken and each country's box."""
+    G, cs, n = sc.G, sc.cs, sc.n
+    k = max(cs // 2, 1)
+    img = Image.new("I", (G.shape[1] * k, G.shape[0] * k), 0)
+    draw = ImageDraw.Draw(img)
+    for j, polys in px_shapes:
+        for poly in polys:
+            for h, ring in enumerate(poly):
+                if len(ring) >= 3:
+                    draw.polygon([tuple(p) for p in (ring * k / cs - 0.5).tolist()], fill=0 if h else j)
+    Gf = np.array(img, dtype=np.int32)
+    return {"k": k, "G": Gf, "occ": np.kron(sc.canvas.occ, np.ones((k, k), bool)),
+            "boxes": find_objects(Gf, max_label=n)}
+
+
+def place_fine(sc, i, name, value, ink):
+    """Put the label of i whole inside it on the fine grid, as big as it fits."""
+    cs, canvas = sc.cs, sc.canvas
+    Gf, focc, k = sc.fine["G"], sc.fine["occ"], sc.fine["k"]
+    sl = sc.fine["boxes"][i - 1]
+    if sl is None:
         return False
-
-    for i in order:
-        if T[i] == 0:
-            continue
-        if fine is not None:
-            ink = max(("#141414", "#ffffff"), key=lambda c: contrast_ratio(c, colour_of[i]))
-            if not place_fine(i, units[i - 1]["name"], value_text(i), ink):
-                external.append(i)
-            continue
-        mine = G == i
-        if not mine.any():
-            continue
-        name = units[i - 1]["name"]
-        value = value_text(i)
-        tcol = "#141414" if luminance(hex_rgb(colour_of[i])) > 0.5 else "#ffffff"
-        inks = sorted(("#141414", "#ffffff"), key=lambda c: -contrast_ratio(c, colour_of[i]))
-        dmap = distance_transform_edt(np.pad(mine, 1))[1:-1, 1:-1]
-        ys, xs = np.nonzero(mine)
-        dv = dmap[ys, xs]
-        cy, cx = centre[i]
-        rank = np.lexsort(((ys - cy) ** 2 + (xs - cx) ** 2, -dv))[:80]
-        fs = cs * min(0.9 + 0.09 * math.sqrt(T[i]), 6.5)
-        placed = False
-        while fs >= (max(cs * 0.55, 8) if geo else max(cs * 0.75, 7)):
-            lines = [(name, fs, False), (value, fs * 0.8, False)]
-            if not thematic and pops[i] / world >= 0.02 and fs >= cs * 2.2:
-                lines.append((tx["share"].format(p=fmt_num(100 * pops[i] / world, 1, tx)), fs * 0.36, False))
-            bw, bh = block_size([(s, z, b, None) for s, z, b in lines])
-            for k in rank:
-                px, py = (xs[k] + 0.5) * cs, (ys[k] + 0.5) * cs
+    f = cs / k                                   # pixels per fine cell
+    sub = np.pad(Gf[sl] == i, 1)
+    dist = distance_transform_edt(sub)[1:-1, 1:-1]
+    ys, xs = np.nonzero(dist > 0)
+    ys, xs, dv = ys + sl[0].start, xs + sl[1].start, dist[ys, xs]
+    cy, cx = (sc.centre[i] + 0.5) * k
+    fs = cs * min(0.9 + 0.09 * math.sqrt(sc.T[i]), 6.5)
+    while fs >= SVG_MIN_FONT:
+        sizes = [text_size_at(name, fs), text_size_at(value, fs * 0.8)]
+        bw, bh = max(w for w, h in sizes), sum(h for w, h in sizes) * 1.08
+        ok = dv * f >= bh / 2
+        if ok.any():
+            cand = np.nonzero(ok)[0]
+            cand = cand[np.lexsort(((ys[cand] - cy) ** 2 + (xs[cand] - cx) ** 2, -dv[cand]))][:60]
+            for c in cand:
+                px, py = (xs[c] + 0.5) * f, (ys[c] + 0.5) * f
                 box = (px - bw / 2, py - bh / 2, px + bw / 2, py + bh / 2)
                 if not canvas.inside(*box):
                     continue
-                r0, r1, c0, c1 = canvas.cells(*box)
-                part = mine[r0:r1, c0:c1]
-                if part.mean() < (0.6 if geo else 0.9) or canvas.occ[r0:r1, c0:c1].any():
+                r0, r1 = max(int(box[1] // f), 0), int(math.ceil(box[3] / f))
+                c0, c1 = max(int(box[0] // f), 0), int(math.ceil(box[2] / f))
+                if (Gf[r0:r1, c0:c1] == i).mean() < 0.97 or focc[r0:r1, c0:c1].any():
                     continue
-                if geo:                         # it may cross the border: an ink that reads on all it covers
-                    # (its own colour takes the better of black and white, as on the cartograms);
-                    # the cells mostly under each line of text, not the whole box
-                    under, y = [], box[1]
-                    for s, size, bold in lines:
-                        w, h = text_size(font(size, bold), s)
-                        a, b = int(round(y / cs)), int(round((y + h) / cs))
-                        c, d = int(round((px - w / 2) / cs)), int(round((px + w / 2) / cs))
-                        under.append(G[a:max(b, a + 1), c:max(d, c + 1)].ravel())
-                        y += h * 1.08
-                    under = np.unique(np.concatenate(under))
-                    others = under[under != i]
-                    tcol = next((c for j, c in enumerate(inks)
-                                 if readable[c][others].all() and (j == 0 or readable[c][i])), None)
-                    if tcol is None:
-                        continue
                 y = box[1]
-                for s, size, bold in lines:
-                    dr.text((px, y), s, size, bold, tcol, anchor="ma")
-                    y += text_size(font(size, bold), s)[1] * 1.08
-                canvas.occ[r0:r1, c0:c1] = True
-                placed = True
-                break
-            if placed:
-                break
-            fs *= 0.88
-        if not placed:
-            external.append(i)
+                for s, size, (_w, h) in zip((name, value), (fs, fs * 0.8), sizes):
+                    sc.dr.text((px, y), s, size, False, ink, anchor="ma")
+                    y += h * 1.08
+                focc[r0:r1, c0:c1] = True
+                q0, q1, p0, p1 = canvas.cells(*box)
+                canvas.occ[q0:q1, p0:p1] = True
+                return True
+        fs *= 0.9
+    return False
 
-    # --- labels outside, with a leader line. They may sit over other countries
-    # (with a halo) when that keeps them much closer than the nearest open sea.
-    # A geographic map has no room to spare: the biggest countries first, without
-    # a halo, only on colours the text reads on, and a label that would cover
-    # another is left out rather than overlap.
+
+def label_inside(sc, i, thematic):
+    """Write the name and value of i inside it on the cell grid, shrinking the text
+    until it fits. Returns False when it does not fit: it goes outside."""
+    cs, canvas, G, geo, tx = sc.cs, sc.canvas, sc.G, sc.geo, sc.tx
+    colour, pops = sc.colour_of[i], sc.pops
+    mine = G == i
+    name = sc.units[i - 1]["name"]
+    value = sc.value_text(i)
+    tcol = "#141414" if luminance(hex_rgb(colour)) > 0.5 else "#ffffff"
+    inks = sorted(("#141414", "#ffffff"), key=lambda c: -contrast_ratio(c, colour))
+    dmap = distance_transform_edt(np.pad(mine, 1))[1:-1, 1:-1]
+    ys, xs = np.nonzero(mine)
+    dv = dmap[ys, xs]
+    cy, cx = sc.centre[i]
+    rank = np.lexsort(((ys - cy) ** 2 + (xs - cx) ** 2, -dv))[:80]
+    fs = cs * min(0.9 + 0.09 * math.sqrt(sc.T[i]), 6.5)
+    while fs >= (max(cs * 0.55, 8) if geo else max(cs * 0.75, 7)):
+        lines = [(name, fs, False), (value, fs * 0.8, False)]
+        if not thematic and pops[i] / sc.world >= 0.02 and fs >= cs * 2.2:
+            lines.append((tx["share"].format(p=fmt_num(100 * pops[i] / sc.world, 1, tx)), fs * 0.36, False))
+        bw, bh = block_size([(s, z, b, None) for s, z, b in lines])
+        for k in rank:
+            px, py = (xs[k] + 0.5) * cs, (ys[k] + 0.5) * cs
+            box = (px - bw / 2, py - bh / 2, px + bw / 2, py + bh / 2)
+            if not canvas.inside(*box):
+                continue
+            r0, r1, c0, c1 = canvas.cells(*box)
+            part = mine[r0:r1, c0:c1]
+            if part.mean() < (0.6 if geo else 0.9) or canvas.occ[r0:r1, c0:c1].any():
+                continue
+            if geo:                         # it may cross the border: an ink that reads on all it covers
+                # (its own colour takes the better of black and white, as on the cartograms);
+                # the cells mostly under each line of text, not the whole box
+                under, y = [], box[1]
+                for s, size, bold in lines:
+                    w, h = text_size(font(size, bold), s)
+                    a, b = int(round(y / cs)), int(round((y + h) / cs))
+                    c, d = int(round((px - w / 2) / cs)), int(round((px + w / 2) / cs))
+                    under.append(G[a:max(b, a + 1), c:max(d, c + 1)].ravel())
+                    y += h * 1.08
+                under = np.unique(np.concatenate(under))
+                others = under[under != i]
+                tcol = next((c for j, c in enumerate(inks)
+                             if sc.readable[c][others].all() and (j == 0 or sc.readable[c][i])), None)
+                if tcol is None:
+                    continue
+            y = box[1]
+            for s, size, bold in lines:
+                sc.dr.text((px, y), s, size, bold, tcol, anchor="ma")
+                y += text_size(font(size, bold), s)[1] * 1.08
+            canvas.occ[r0:r1, c0:c1] = True
+            return True
+        fs *= 0.88
+    return False
+
+
+def labels_outside(sc, external):
+    """Labels outside, with a leader line. They may sit over other countries
+    (with a halo) when that keeps them much closer than the nearest open sea.
+    A geographic map has no room to spare: the biggest countries first, without
+    a halo, only on colours the text reads on, and a label that would cover
+    another is left out rather than overlap."""
+    cs, th, geo, fine, canvas, units, centre = sc.cs, sc.th, sc.geo, sc.fine, sc.canvas, sc.units, sc.centre
     efs = max(cs * 0.7, 8) if geo else max(cs * 0.95, 8)
     # an SVG map searches on its fine grid: Gx, cells of gs pixels
-    Gx, gs, occ = (fine["G"], cs / fine["k"], fine["occ"]) if fine else (G, cs, canvas.occ)
+    Gx, gs, occ = (fine["G"], cs / fine["k"], fine["occ"]) if fine else (sc.G, cs, canvas.occ)
     H_, W_ = Gx.shape
     land = Gx > 0
     halo = th["ocean"] or th["bg"]
     dirs = [(math.cos(a), math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36 if geo else 24, endpoint=False)]
     leaders, ext_texts = [], []
     wired = np.zeros_like(occ)
-    ext_ok = readable[th["label"]][Gx] if geo else None
+    ext_ok = sc.readable[th["label"]][Gx] if geo else None
     unlabelled = []
 
     def cells(box):
@@ -2755,7 +2799,7 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                 max(int(x0 // gs), 0), min(int(math.ceil(x1 / gs)), W_))
 
     for i in external:
-        s = f"{units[i - 1]['name']} {value_text(i)}"
+        s = f"{units[i - 1]['name']} {sc.value_text(i)}"
         ys, xs = np.nonzero(main_part(Gx == i))
         if len(ys) == 0:                 # too small for the fine grid: its cell's centre
             ys, xs = (np.array([int((centre[i][j] + 0.5) * cs / gs)]) for j in (0, 1))
@@ -2829,11 +2873,15 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
         ext_texts.append(((box[0] + (size * 0.15 if fine else 2), box[1] + (size * 0.07 if fine else 1)), s, size))
     if unlabelled:
         log(f"  no room for {len(unlabelled)} label(s): {', '.join(unlabelled)}")
-    dr.lines(leaders, th["lead"], cs * 0.03 if fine else max(1, cs // 10))
+    sc.dr.lines(leaders, th["lead"], cs * 0.03 if fine else max(1, cs // 10))
     for xy, s, size in ext_texts:
-        dr.text(xy, s, size, False, th["label"], anchor="la", halo=None if geo else halo, halo_w=max(1, cs // 7))
+        sc.dr.text(xy, s, size, False, th["label"], anchor="la", halo=None if geo else halo, halo_w=max(1, cs // 7))
 
-    # --- boxes
+
+def draw_boxes(sc, boxes, missing_colour):
+    """The title, the legend and the "not on the map" list, in their framed boxes."""
+    dr, th, cs, pad = sc.dr, sc.th, sc.cs, sc.pad
+
     def frame_box(b):
         dr.rect(b[:4], th["box"], th["box_edge"], max(1, cs // 6))
 
@@ -2853,9 +2901,11 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
                 dr.text((x, y), s, size, bold, th["text"])
             y += text_size(font(size, bold), s or " ")[1] * 1.08
 
-    text_box(title_box, title)
+    text_box(*boxes["title"])
+    legend_box, legend = boxes["legend"]
     if legend_box:
         text_box(legend_box, legend)
+    small_box, small_head, sfs = boxes["small"]
     if small_box:
         frame_box(small_box)
         x0, y0, _, _, cols, widths = small_box
@@ -2867,9 +2917,6 @@ def render(layout, th, lang, cs, out_path, thematic=None, region=None):
             for j, e in enumerate(col):
                 dr.text((x, y0 + j * lh), e, sfs, False, th["text"])
             x += w + cs * 1.5
-
-    w, h = dr.save(out_path)
-    log(f"saved {out_path} ({w}x{h})")
 
 
 # ---------------------------------------------------------------------------
