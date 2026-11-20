@@ -41,10 +41,10 @@ select = ["E", "F", "W", "B", "I"]
 ignore = ["B905"]          # zip() without strict=: the zipped sequences have the same length by construction
 
 [tool.ruff.lint.per-file-ignores]
-"test/*" = ["E501"]
+"tests/*" = ["E501"]
 
 [tool.mypy]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["test"]       # tests/ is a local folder of generated maps, ignored by git
+testpaths = ["tests"]      # scratch/ is a local folder of generated maps, ignored by git

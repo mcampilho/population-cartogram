@@ -11,9 +11,9 @@ mapa-mundo: a Índia e a China ocupam meia Ásia, a Nigéria domina África, e o
 Austrália quase desaparecem. 16 432 quadrados mostram onde vivem os 8,2 mil milhões de habitantes
 do mundo.
 
-![Cartograma da população mundial 2025, tema escuro](examples/mundo_2025_classic_pt_dark.png)
+![Cartograma da população mundial 2025, tema escuro](docs/images/mundo_2025_classic_pt_dark.png)
 
-![Cartograma da população mundial 2025, tema claro](examples/mundo_2025_classic_pt_light.png)
+![Cartograma da população mundial 2025, tema claro](docs/images/mundo_2025_classic_pt_light.png)
 
 Este projeto atualiza o **cartograma de 2018 de Max Roser** para a Our World in Data com os números
 de população mais recentes (2025 para todos os países listados pelo Banco Mundial). Parte da
@@ -84,14 +84,14 @@ do ano seguinte.
 dos países, esticadas e encolhidas para que a área de cada país seja proporcional à sua
 população. Os países continuam encostados aos vizinhos.
 
-![Cartograma de contornos 2025](examples/mundo_2025_contornos_pt.png)
+![Cartograma de contornos 2025](docs/images/mundo_2025_contornos_pt.png)
 
-![Cartograma de contornos 2025, tema escuro](examples/world_2025_outlines_dark.png)
+![Cartograma de contornos 2025, tema escuro](docs/images/world_2025_outlines_dark.png)
 
 Todas as outras opções funcionam da mesma forma: `--year`, `--region`, `--color-by`, `--theme`,
 `--palette`, `--lang` e a saída SVG.
 
-![África por esperança de vida, contornos](examples/africa_2025_outlines_life.png)
+![África por esperança de vida, contornos](docs/images/africa_2025_outlines_life.png)
 
 A primeira execução de cada ano demora alguns minutos; o resultado fica em cache.
 
@@ -107,9 +107,9 @@ python population_cartogram.py --style map --projection robinson --year 2100 --r
 python population_cartogram.py --style map --region europe --color-by life --ramp viridis
 ```
 
-![População mundial 2025, projeção Equal Earth](examples/world_2025_map_equal_earth.png)
+![População mundial 2025, projeção Equal Earth](docs/images/world_2025_map_equal_earth.png)
 
-![População mundial 2100, projeção Robinson, escala arco-íris](examples/mundo_2100_mapa_robinson_pt.png)
+![População mundial 2100, projeção Robinson, escala arco-íris](docs/images/mundo_2100_mapa_robinson_pt.png)
 
 - **Projeções** (`--projection`): `equal-earth` (padrão; equivalente, por isso não exagera os países
   grandes), `robinson`, `winkel-tripel` (a dos mapas-mundo da National Geographic), `mollweide`
@@ -131,7 +131,7 @@ python population_cartogram.py --style map --region europe --color-by life --ram
   Acrescenta `_r` para inverter, p. ex. `viridis_r`.
 - `--region`, `--year`, `--color-by`, `--theme`, `--lang` e o SVG funcionam como nos cartogramas.
 
-![Europa por esperança de vida, estilo mapa](examples/europe_2025_map_life.png)
+![Europa por esperança de vida, estilo mapa](docs/images/europe_2025_map_life.png)
 
 `--classes`, `--breaks` e `--ramp` também funcionam nos cartogramas com `--color-by`.
 
@@ -160,7 +160,7 @@ cores por igual e é a mais segura; `jenks` é melhor quando os valores formam g
 usa as estimativas do Banco Mundial; depois disso, a **projeção da ONU (World Population Prospects
 2024, variante média)**. Em 2050 o mundo precisa de 19 322 quadrados, e um quarto deles são africanos:
 
-![Projeção da ONU para 2050](examples/world_2050_projection_dark.png)
+![Projeção da ONU para 2050](docs/images/world_2050_projection_dark.png)
 
 ### Regiões
 
@@ -168,7 +168,7 @@ usa as estimativas do Banco Mundial; depois disso, a **projeção da ONU (World 
 recorta o mapa à volta de um continente, com quadrados e legendas maiores. Os países vizinhos
 continuam visíveis, esbatidos.
 
-![Europa](examples/europe_2025_dark.png)
+![Europa](docs/images/europe_2025_dark.png)
 
 ### Mapas temáticos
 
@@ -186,24 +186,24 @@ as mesmas pessoas *e* mostra como é o seu país.
 Os valores são divididos em classes com aproximadamente o mesmo número de países; a legenda e cada
 etiqueta mostram-nos, e as fronteiras separam países com a mesma cor.
 
-![Variação da população 2025–2050](examples/world_2050_growth_dark.png)
+![Variação da população 2025–2050](docs/images/world_2050_growth_dark.png)
 
-![PIB per capita](examples/world_2025_gdp_light.png)
+![PIB per capita](docs/images/world_2025_gdp_light.png)
 
-![África por esperança de vida](examples/africa_2025_life_light.png)
+![África por esperança de vida](docs/images/africa_2025_life_light.png)
 
 ### SVG
 
 Com `-o mapa.svg` o mapa é escrito em gráficos vetoriais: fica nítido em qualquer ampliação e pode
 ser editado. Cada país é um grupo com o código ISO como `id` e o nome e a população como dica, para
 o ficheiro poder ser reestilizado ou reutilizado numa página web. Ver
-[world_2025_classic_dark.svg](examples/world_2025_classic_dark.svg).
+[world_2025_classic_dark.svg](docs/images/world_2025_classic_dark.svg).
 
 Em `--style map`, o SVG tem rótulos feitos para ampliar: cada nome é encaixado inteiro dentro do
 seu país, tão grande quanto cabe, até 1,5 px — o Luxemburgo ou o Montenegro parecem pequenas marcas
 cinzentas a 100% e leem-se bem a 400–800%. Só os países pequenos demais para conter texto (Vaticano,
 Mónaco, ilhas das Caraíbas) têm um rótulo pequeno ao lado. No mapa-mundo todos os países ficam com
-nome. Ver [world_2025_map.svg](examples/world_2025_map.svg).
+nome. Ver [world_2025_map.svg](docs/images/world_2025_map.svg).
 
 ### PDF
 
@@ -251,7 +251,7 @@ temáticos. Acrescenta as tuas e verifica-as com `--list-palettes`.
 
 Incluídas: `classic`, `pastel`, `colorblind`, `neon` e `earth`.
 
-![Paleta pastel, tema escuro](examples/world_2025_pastel_dark.png)
+![Paleta pastel, tema escuro](docs/images/world_2025_pastel_dark.png)
 
 ## Como funciona
 
